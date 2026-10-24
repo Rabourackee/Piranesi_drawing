@@ -25,6 +25,12 @@
       <h2>Burin</h2>
       <div class="toolgrid" id="tools"></div>
 
+      <h2>Perspective</h2>
+      <div class="seg" role="group" aria-label="Perspective">
+        <button data-persp="1" class="on" aria-pressed="true">One-point</button>
+        <button data-persp="2" aria-pressed="false">Two-point</button>
+      </div>
+
       <h2>Depth layer</h2>
       <div class="seg" id="layers">
         <button data-z="1" class="on">Near</button>
@@ -63,6 +69,10 @@
         <div class="progress" id="progress"><span></span></div>
       </div>
       <div class="quickbar" id="quickbar">
+        <div class="seg persp" role="group" aria-label="Perspective">
+          <button data-persp="1" class="on" aria-pressed="true" title="One-point perspective: the hall runs straight away from you">1-point</button>
+          <button data-persp="2" aria-pressed="false" title="Two-point perspective: the hall is seen from a corner, its vanishing points off to the sides">2-point</button>
+        </div>
         <button class="primary" id="qEtch" title="Etch the plate (Enter)">Etch</button>
         <button id="qPlants" class="on" aria-pressed="true" title="Plants (P)">Plants</button>
         <button id="qPeople" class="on" aria-pressed="true" title="People (O)">People</button>
@@ -100,6 +110,7 @@
 
   <script src="js/rng.js"></script>
   <script src="js/geom.js"></script>
+  <script src="js/persp.js"></script>
   <script src="js/plate.js"></script>
   <script src="js/wear.js"></script>
   <script src="js/build.js"></script>

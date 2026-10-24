@@ -4,6 +4,9 @@
  * Pipeline: imagined hall -> user elements (depth-sorted, fogged with distance)
  *           -> atmospheric tone pass slipped in between background and foreground
  *           -> the user's own shadow brush -> plate number and caption.
+ * In two-point perspective the scene is built in one-point space over the region the turned
+ * camera sees, then every mark is carried into the picture (js/persp.js); construction lines,
+ * atmosphere and caption are laid directly on the picture.
  */
 const Engine = (() => {
   const PRI = Hall.PRI;
@@ -28,6 +31,24 @@ const Engine = (() => {
   }
 
   function compose(st) {
+    const pz = st.persp === 2 ? Persp.make(st.vp) : null;
+    let sst = st;
+    if (pz) {
+      // the stretch of one-point space that the turned camera sees through the plate
+      const q = st.plate, ring = [];
+      for (let i = 0; i <= 24; i++) {
+        const t = i / 24;
+        ring.push(G.P(q.x + t * q.w, q.y), G.P(q.x + t * q.w, q.y + q.h), G.P(q.x, q.y + t * q.h), G.P(q.x + q.w, q.y + t * q.h));
+      }
+      const bb = G.bbox(ring.map(pz.from));
+      sst = { ...st, plate: { x: bb.x0, y: bb.y0, w: bb.w, h: bb.h }, strokes: st.strokes.map(k => ({ ...k, pts: k.pts.map(pz.from) })) };
+    }
+    const S = scene(sst);
+    return st.planOnly ? S : finish(st, S, pz);
+  }
+
+  /* The architecture, drawn in one-point space. */
+  function scene(st) {
     const p = st.params, plate = st.plate, vp = st.vp;
     const rand = new Rng.Rand(st.seed);
     const sc = {
@@ -44,16 +65,6 @@ const Engine = (() => {
 
     const pl = new Plate.Plate(rand.fork(7), { ...penOpt, inkFade: 1 - p.age * 0.12 });
     pl.clip([G.rect(plate.x, plate.y, plate.w, plate.h)]);
-    // the draughtsman's construction: horizon and rays to the vanishing point, left faintly visible
-    const cr = rand.fork(31), cl = new Plate.Plate(cr, penOpt);
-    cl.ink(G.P(plate.x - 10, vp.y), G.P(plate.x + plate.w + 10, vp.y), 0.4, 0.16, 0.4, 0.3);
-    const targets = [[plate.x, plate.y], [plate.x + plate.w, plate.y], [plate.x, plate.y + plate.h], [plate.x + plate.w, plate.y + plate.h]];
-    for (let i = 0; i < 10; i++) {
-      const e = cr.int(0, 3), t = cr.next();
-      targets.push(e === 0 ? [plate.x + t * plate.w, plate.y] : e === 1 ? [plate.x + t * plate.w, plate.y + plate.h] : e === 2 ? [plate.x, plate.y + t * plate.h] : [plate.x + plate.w, plate.y + t * plate.h]);
-    }
-    for (const [x, y] of targets) cl.ink(vp, G.P(x, y), 0.35, 0.13, 0.5, 0.4);
-    pl.ops.push(...cl.ops);
 
     // 1. read the user's strokes
     // a part that stops short of the near floor stands further back, on the distant floor
@@ -104,15 +115,42 @@ const Engine = (() => {
     }
     if (envAt < 0) envAt = pl.ops.length;
     pl.setFog(0);
+    return { ops: pl.ops, envAt, sc, rand, penOpt };
+  }
 
-    const env = Tone.envField(sc, rand.fork(3), p.darkness, st.strokes);
+  /* Construction lines, atmosphere, the user's shadow brush, plate number and caption, laid on
+     the picture itself; in two-point perspective the scene's marks are carried over first. */
+  function finish(st, S, pz) {
+    const p = st.params, plate = st.plate, { sc, rand, penOpt } = S;
+    const geo = pz ? Persp.mapOps(S.ops, pz.to) : S.ops;
+    const head = pz ? [{ t: 'clip', rings: [G.rect(plate.x, plate.y, plate.w, plate.h)] }] : [geo[0]];
+    const body = pz ? geo : geo.slice(1), envAt = pz ? S.envAt : S.envAt - 1;
+
+    // the draughtsman's construction: horizon and rays to the vanishing points, left faintly visible
+    const cr = rand.fork(31), cl = new Plate.Plate(cr, penOpt);
+    const hy = pz ? pz.c.y : sc.vp.y;
+    cl.ink(G.P(plate.x - 10, hy), G.P(plate.x + plate.w + 10, hy), 0.4, 0.16, 0.4, 0.3);
+    const edge = () => {
+      const e = cr.int(0, 3), t = cr.next();
+      return e === 0 ? G.P(plate.x + t * plate.w, plate.y) : e === 1 ? G.P(plate.x + t * plate.w, plate.y + plate.h) : e === 2 ? G.P(plate.x, plate.y + t * plate.h) : G.P(plate.x + plate.w, plate.y + t * plate.h);
+    };
+    const corners = [G.P(plate.x, plate.y), G.P(plate.x + plate.w, plate.y), G.P(plate.x, plate.y + plate.h), G.P(plate.x + plate.w, plate.y + plate.h)];
+    for (const v of pz ? [pz.vpDepth, pz.vpSide] : [sc.vp]) {
+      const targets = corners.slice();
+      for (let i = 0; i < (pz ? 7 : 10); i++) targets.push(edge());
+      for (const q of targets) cl.ink(v, q, 0.35, 0.13, 0.5, 0.4);
+    }
+
+    // atmosphere is laid in the picture, so its hatching keeps its true direction
+    const tsc = pz ? { ...sc, W: st.W, H: st.H, plate, vp: pz.vpDepth, casts: sc.casts.map(c => ({ ...c, poly: c.poly.map(pz.to) })), shafts: sc.shafts.map(c => ({ ...c, poly: c.poly.map(pz.to) })) } : sc;
+    const env = Tone.envField(tsc, rand.fork(3), p.darkness, st.strokes);
     const ep = new Plate.Plate(rand.fork(4), penOpt);
     Tone.hatchField(ep, env, plate, p.density, 5);
 
     const tail = new Plate.Plate(rand.fork(9), penOpt);
-    const fg = Tone.envField(sc, rand.fork(3), p.darkness, st.strokes, true);
+    const fg = Tone.envField(tsc, rand.fork(3), p.darkness, st.strokes, true);
     Tone.hatchField(tail, fg, plate, p.density, 11);
-    const uf = Tone.userField(sc, st.strokes);
+    const uf = Tone.userField(tsc, st.strokes);
     if (uf) Tone.hatchField(tail, uf, plate, p.density, 17);
     const sr = rand.fork(21);
     for (let i = 0; i < 9; i++) {
@@ -125,7 +163,7 @@ const Engine = (() => {
     tail.unclip();
     tail.text(`Carceri d’invenzione · Tav. ${numeral}`, plate.x + plate.w / 2, plate.y + plate.h + 42, 'italic 17px "IM Fell English", Georgia, serif', 0.75);
 
-    const ops = pl.ops.slice(0, envAt).concat(ep.ops, pl.ops.slice(envAt), tail.ops);
+    const ops = head.concat(cl.ops, body.slice(0, envAt), ep.ops, body.slice(envAt), pz ? [{ t: 'unclip' }] : [], tail.ops);
     return { ops, numeral };
   }
 

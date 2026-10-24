@@ -6,7 +6,7 @@
  *   piers   stand on the floor or on a beam, and rise to the vaults or to the beam they carry
  *   arches  spring from whatever surface lies beneath their legs
  *   stairs  start on a surface (extending the flight down if needed) and arrive on a landing
- *   bridges are anchored at both ends: frame edge, hall wall, a solid they butt into, or a
+ *   bridges are anchored at both ends: frame edge, a solid they butt into, or a
  *           new pier raised under the free end
  *   windows are cut into a solid; if none is there, a masonry wall is built around them
  *   chains, lanterns, ropes and pulleys hang from something real
@@ -214,14 +214,14 @@ const Structure = (() => {
           const pw = clamp((st.S.y - st.E.y) * 0.15, 14, 50);
           add({ kind: 'pier', z: z * 1.002, x: st.S.x, w: pw, y0: st.S.y, y1: sb.y, ring: false });
         }
-      } else st.S = P(st.S.x, sb.y);
+      } else if (st.S.y - sb.y < st.S.y - st.E.y - 12) st.S = P(st.S.x, sb.y); // never snap a flight flat
       st.solid = Math.abs(st.S.y - floor) < 2;
 
       const E = st.E;
       for (const f of surfaces(z, st)) {
         if (f.s.kind === 'stair' || E.x < f.x0 - 30 || E.x > f.x1 + 30) continue;
         const sy = f.y(clamp(E.x, f.x0, f.x1));
-        if (Math.abs(sy - E.y) < 40) {
+        if (Math.abs(sy - E.y) < 40 && sy < st.S.y - 12) {
           st.E = P(E.x, sy);
           if (f.s.kind === 'beam') { f.s.x0 = Math.min(f.s.x0, E.x - 6); f.s.x1 = Math.max(f.s.x1, E.x + 6); }
           return;
@@ -229,17 +229,16 @@ const Structure = (() => {
       }
       if (E.y <= ceilY(z) + 10 || E.x <= pt.x || E.x >= pt.x + pt.w) return; // continues out of view
       // nothing to arrive on: build a landing that joins the main structure. It reaches for a pier
-      // or wall just behind the top, else runs on to the next support ahead or into the hall
-      // wall as a gallery; only when that is too far does it stand on a pier of its own.
+      // or wall just behind the top, else runs on to the next support ahead; only when that is
+      // too far does it stand on a pier of its own.
       const rise = st.S.y - E.y, h = clamp(rise / 12, 8, 20), depth = clamp(rise * 0.6, 60, 200);
       const dir = Math.sign(E.x - st.S.x) || 1;
       const probe = (d, max) => {
         for (let k = 6; k <= max; k += 4) if (solidAt(z, P(E.x + d * k, E.y + h * 0.5), st)) return k;
         return null;
       };
-      const toWall = dir > 0 ? wallR(z) - E.x : E.x - wallL(z);
       const back = probe(-dir, clamp(rise * 0.6, 40, 160));
-      const fwd = probe(dir, Math.max(0, toWall));
+      const fwd = probe(dir, pt.w * 0.4);
       const land = (d, k, o = {}) => {
         const far = E.x + d * k;
         return add({ kind: 'beam', z, x0: Math.min(E.x - d * 4, far), x1: Math.max(E.x - d * 4, far), y: E.y, h, rail: true, chains: 0, landing: true, cantilever: true, depth, ...o });
@@ -248,12 +247,6 @@ const Structure = (() => {
       const prop = (x, w) => add({ kind: 'pier', z: z * 1.002, x, w, y0: E.y + h, y1: surfaceBelow(z, x, E.y + h + 1, st).y, ring: false });
       if (back != null && (fwd == null || back < fwd)) { land(-dir, back + 3); return; }
       if (fwd != null && fwd < reach * 1.3) { land(dir, fwd + 3); return; }
-      if (toWall > 0 && toWall < reach) {
-        // a gallery into the hall wall; a long one rests on a pier along the way
-        land(dir, toWall + 8, { gallery: true });
-        if (toWall > 140 / Math.sqrt(z)) prop(E.x + dir * toWall * 0.5, clamp(h * 2.6, 14, 50));
-        return;
-      }
       // otherwise the flight arrives on a landing tower: a broad masonry pier under the landing
       const len = clamp(rise * 0.32, 30 / Math.sqrt(z), 120);
       land(dir, len, { cantilever: false, tower: true });
@@ -293,14 +286,7 @@ const Structure = (() => {
         const ex = end < 0 ? b.x0 : b.x1;
         const yb = Build.beamBottom(b, ex), ym = (Build.beamTop(b, ex) + yb) / 2;
         if (yb >= sc.floorAt(z) - 3) { state[end] = 'floor'; continue; } // this end already rests on the floor
-        const wallX = end < 0 ? wallL(z) + 4 : wallR(z) - 4;
-        if (end < 0 ? ex <= pt.x + 2 : ex >= pt.x + pt.w - 2) { state[end] = 'edge'; continue; }
-        if (end < 0 ? ex <= wallX : ex >= wallX) {
-          // it springs from the hall wall: a corbel carries it there
-          state[end] = 'wall';
-          b.corbels.push({ end, x: ex });
-          continue;
-        }
+        if (end < 0 ? ex <= pt.x + 2 : ex >= pt.x + pt.w - 2) { state[end] = 'edge'; continue; } // runs out of view
         // carried from below near this end (a pier, wall or arch under it)?
         const tol = Math.max(24, len * 0.15);
         let carried = false;
@@ -331,7 +317,7 @@ const Structure = (() => {
         if (state[end] !== 'free') continue;
         const other = state[-end];
         // a short landing or gallery may cantilever from its anchored end, on consoles
-        if (b.cantilever && (other === 'butt' || other === 'wall' || other === 'edge') && b.x1 - b.x0 < 220 / Math.sqrt(b.z)) {
+        if (b.cantilever && (other === 'butt' || other === 'edge') && b.x1 - b.x0 < 220 / Math.sqrt(b.z)) {
           b.consoleFrom = -end;
           continue;
         }
@@ -476,7 +462,7 @@ const Structure = (() => {
     kept.unsupported = loose.filter(s => s.user);
     return kept;
 
-    /* ----- 8. audit: starting from the floor, the hall walls, the vaults and the frame, find
+    /* ----- 8. audit: starting from the floor, the vaults and the frame, find
        what is really held up by something that is itself held up ----- */
     // each need is a list of points; it is met when any one of them is held
     function needs(s) {
@@ -514,7 +500,7 @@ const Structure = (() => {
       const z = s.z;
       if (p.x <= pt.x + 2 || p.x >= pt.x + pt.w - 2 || p.y <= Math.max(ceilY(z), pt.y) + 3) return true;
       if (p.y > sc.floorAt(z) - 4 || p.y > pt.y + pt.h) return true;
-      return p.x <= wallL(z) + 6 || p.x >= wallR(z) - 6;
+      return false;
     }
     function audit() {
       const ok = new Set(), bear = new Set();

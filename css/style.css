@@ -126,11 +126,14 @@ body.minimal button.primary { background: #222; color: #fff; border-color: #222;
 body.minimal button.primary:hover { background: #444; }
 body.minimal button:focus-visible { outline-color: #222; }
 body.minimal .progress span { background: #222; }
-body.minimal .quickbar { display: flex; gap: 8px; justify-content: center; }
+body.minimal .quickbar { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
+body.minimal .quickbar .seg button { min-width: 78px; white-space: nowrap; color: #555; }
+body.minimal .quickbar .seg button.on { background: #222; color: #fff; }
+body.minimal .quickbar .seg { margin-right: 6px; }
 body.minimal .quickbar button { min-width: 92px; font-size: 16px; }
 /* the toggles read as switches, not actions: a dot that fills when on, greyed out when off */
-body.minimal .quickbar button[aria-pressed] { background: #fff; color: #9a9a9a; border-color: #e0e0e0; display: inline-flex; align-items: center; justify-content: center; gap: 7px; }
-body.minimal .quickbar button[aria-pressed]::before { content: ''; width: 8px; height: 8px; border-radius: 50%; border: 1.5px solid currentColor; }
+body.minimal .quickbar > button[aria-pressed] { background: #fff; color: #9a9a9a; border-color: #e0e0e0; display: inline-flex; align-items: center; justify-content: center; gap: 7px; }
+body.minimal .quickbar > button[aria-pressed]::before { content: ''; width: 8px; height: 8px; border-radius: 50%; border: 1.5px solid currentColor; }
 body.minimal .quickbar button[aria-pressed="true"] { color: #222; border-color: #222; }
 body.minimal .quickbar button[aria-pressed="true"]::before { background: currentColor; }
 body.minimal .quickbar .primary { width: auto; min-width: 120px; padding: 6px 18px; font-size: 17px; }

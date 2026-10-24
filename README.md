@@ -35,10 +35,11 @@ You can also force any element with the tool buttons. Other tools:
 - **Erase** removes strokes you touch.
 - **Vantage** drags the vanishing point. Every element and the whole hall re-project to it.
 - **A quiet page by default.** The page opens on white with only the plate, **Etch**, **Plants** and **People**. The ☰ button in the top-right corner shows the full set of tools, depth layers, sliders and views, and hides them again. The page remembers your choice, and `?ui=full` opens with everything shown. Shortcuts work in both modes.
+- **1-point / 2-point** chooses the canvas. One-point looks straight down the hall to a vanishing point inside the picture. Two-point sees the prison from a corner, like a camera turned sideways: verticals stay vertical, the depth of the hall runs to a vanishing point on one side and everything across it to a far one on the other, usually both off the canvas. The sketch guides fan out from both, with arrows at the plate edge when a point lies off the canvas. Draw along the guides and your lines become bridges and walls that follow them; a line drawn flat across the plate is still read as a bridge. Vantage moves the centre of vision, and both vanishing points with it. `?persp=2` opens in two-point.
 - **Plants** (P) switches vegetation on or off. Shrubs burst from broken tops and the ends of cornices and bridges, ivy trails from the corners of bridges and arches, and weeds gather at the feet of piers and stairs. Each element grows its plants right after it is drawn (`js/flora.js`), so nearer things still hide them. How much grows follows the Ruin & wear slider.
 - **People** (O) lets the system place the figures itself: small groups talking and pointing on bridges and on the floor, someone climbing a stair, a prisoner chained at the foot of a pier. Figures are only put where they stand on something and are not inside a wall. The Figure tool still adds your own.
 - **Depth layer** puts new strokes Near, Middle or Far. Far strokes are thinner and fogged.
-- **Depth from the drawing.** You do not have to draw down to the bottom of the plate. A pier, arch or stair that stops short of the near floor is read as standing further back, on the floor line that passes through its foot. Parts that touch move back together, and chains and figures follow whatever holds them. Nothing imagined is placed in front of a distant group, and the back wall always stands behind it.
+- **Depth from the drawing.** You do not have to draw down to the bottom of the plate. A pier, arch or stair that stops short of the near floor is read as standing further back, on the floor line that passes through its foot. Parts that touch move back together, and chains and figures follow whatever holds them. Nothing imagined is placed in front of a distant group.
 
 Keyboard shortcuts: `A`, `1` to `9`, `S`, `L`, `E` and `V` pick tools. `Enter` etches,
 `R` reimagines with a new seed, and `Ctrl+Z` undoes.
@@ -53,14 +54,20 @@ Keyboard shortcuts: `A`, `1` to `9`, `S`, `L`, `E` and `V` pick tools. `Enter` e
    `z` and is extruded toward the vanishing point. Each edge becomes a face. Faces are culled
    against the vanishing point and painter-sorted. Each face gets a tone from a fixed
    upper-left light, and the inside of openings is darkened.
+   **Two-point** (`js/persp.js`) reuses all of this. Turning a camera about its vertical axis
+   maps a one-point picture onto a two-point one by a plane homography, which keeps straight
+   lines straight and verticals vertical. Your strokes are carried back into one-point
+   space, the prison is built there over the region the turned camera sees, and every pen
+   line, fill and clip is carried forward onto the canvas. Construction lines and the
+   atmosphere are laid on the canvas itself, so their hatching keeps its direction.
 3. **Hatching in surface coordinates.** Receding faces are hatched along their own
    parameters. Lines run to the vanishing point and transverse rings sit at
    perspective-correct depths. The grids are shared along a whole outline, so curved vaults
    hatch continuously. Frontal faces get layered parallel hatching on a global grid. Each
    new layer starts only at a darker threshold, the way etchers build value.
-4. **The imagined prison** (`js/hall.js`). Around your sketch, a seeded hall is built in 3D. It
-   has a flagstone floor, a timbered ceiling, arcaded side walls, a back wall with a great
-   arch and a misty vista beyond. Everything else grows out of what you drew, so an empty
+4. **The imagined prison** (`js/hall.js`). Around your sketch lies only a flagstone floor,
+   fading into the haze, with the vaults lost in darkness above the frame. There are no fixed
+   walls, back wall or ceiling to clash with your own perspective. Everything else grows out of what you drew, so an empty
    sketch etches nothing. The **Imagination** slider sets how far it grows:
    - **Echoes.** Your bay repeats down the hall in true perspective, scaled about the
      vanishing point, so a pier becomes a receding colonnade and an arch a receding arcade.
@@ -77,18 +84,18 @@ Keyboard shortcuts: `A`, `1` to `9`, `S`, `L`, `E` and `V` pick tools. `Enter` e
    instead of being stretched down to the near one. No group goes so deep that it would be
    wider than the hall there. Piers rest on the floor or a beam. Arches spring from
    what lies under their legs. Stairs start on a surface and arrive on a landing, which is
-   built if missing. Bridges are anchored at both ends by the frame edge, a hall wall or a
+   built if missing. Bridges are anchored at both ends by the frame edge or a
    solid they butt into, or a new pier is raised under the free end. Windows are cut into
    a wall. Chains, lanterns, ropes and pulleys hang from a soffit, an arch or the vault,
    and figures stand on floors, bridges, landings and treads. A bridge end never rests on
    another bridge: where two meet, a pier rises under the joint. Finally an audit starts
-   from the floor, the hall walls, the vaults and the frame, and follows what touches what
+   from the floor, the vaults and the frame, and follows what touches what
    at the same depth. Anything imagined that is not held up this way is not built.
    Parts are joined the way a builder would join them:
    - **Wound stairs.** Great piers get stairs wound around them. Flights alternate in front of and behind the shaft, turn on landings corbelled out of its flanks, and arrive at a door cut into the pier.
-   - **Beams growing out of supports.** A beam or landing that meets a pier, a wall or the hall wall grows out of it on a corbel, a scrolled console or a timber brace. Short landings cantilever on a row of consoles instead of standing on props.
+   - **Beams growing out of supports.** A beam or landing that meets a pier or a wall grows out of it on a corbel, a scrolled console or a timber brace. Short landings cantilever on a row of consoles instead of standing on props.
    - **Arches.** Arches spring from neighbouring piers.
-   - **Stairs always arrive somewhere.** Every flight starts on the floor or a deck and ends on a platform joined to the main structure. A missing landing reaches back to a pier or wall just behind the top, or on to the next support ahead. Failing that, it runs into the hall wall as a gallery, propped midway if long. Failing that, it stands on a landing tower, a broad masonry pier of its own. Long flying flights rest on piers under their stringer, and flights wound around a pier hang on its landings. The audit drops any imagined stair whose foot or head is not held.
+   - **Stairs always arrive somewhere.** Every flight starts on the floor or a deck and ends on a platform joined to the main structure. A missing landing reaches back to a pier or wall just behind the top, or on to the next support ahead. Failing that, it stands on a landing tower, a broad masonry pier of its own. Long flying flights rest on piers under their stringer, and flights wound around a pier hang on its landings. The audit drops any imagined stair whose foot or head is not held.
 6. **Variety** (`Build.style` in `js/build.js`). Each element gets its own look from the seed:
    - **Piers:** square rusticated, banded with worm-eaten rustication, rubble, pilastered, round fluted columns, or round towers with curved coursing and arrow slits. Capitals and plinths vary too.
    - **Bridges:** flat, carried on an arch, or timber. Railings can be balusters, wrought iron, a solid parapet, timber posts with rope, or a broken balustrade.
@@ -126,6 +133,7 @@ saved file name.
 | `js/tone.js` | Atmospheric darkness field and tonal hatching |
 | `js/plate.js` | Ink-line primitives, hatching and playback |
 | `js/paper.js` | Paper and plate mark |
+| `js/persp.js` | Two-point perspective as a turned camera (a plane homography) |
 | `js/rng.js`, `js/geom.js` | Seeded random and noise, and 2D geometry |
 | `js/example.js` | Demo sketches |
 

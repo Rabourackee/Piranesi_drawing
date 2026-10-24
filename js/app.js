@@ -22,6 +22,7 @@
     vp: G.P(W * 0.5, H * 0.57),
     seed: +qs.get('seed') || 1 + Math.floor(Math.random() * 99999),
     view: 'sketch',
+    persp: qs.get('persp') === '2' ? 2 : 1,
     params: { depth: 1, imagination: 0.75, darkness: 0.7, density: 1, fog: 0.5, wear: 0.55, hand: 0.7, sketch: 0.7, age: 0.35, brush: 34, plants: 1, people: 1 },
   };
 
@@ -164,14 +165,50 @@
       c.globalAlpha = alpha;
       c.strokeStyle = 'rgba(150,80,40,.28)';
       c.setLineDash([4, 6]);
+      const pz = persp();
+      const corners = [[PLATE.x, PLATE.y], [PLATE.x + PLATE.w, PLATE.y], [PLATE.x, PLATE.y + PLATE.h], [PLATE.x + PLATE.w, PLATE.y + PLATE.h]];
       c.beginPath();
       c.moveTo(PLATE.x, vp.y); c.lineTo(PLATE.x + PLATE.w, vp.y);
-      for (const [x, y] of [[PLATE.x, PLATE.y], [PLATE.x + PLATE.w, PLATE.y], [PLATE.x, PLATE.y + PLATE.h], [PLATE.x + PLATE.w, PLATE.y + PLATE.h]]) { c.moveTo(vp.x, vp.y); c.lineTo(x, y); }
+      if (!pz) for (const [x, y] of corners) { c.moveTo(vp.x, vp.y); c.lineTo(x, y); }
+      else {
+        // a fan of rays from each vanishing point across the plate
+        c.stroke();
+        c.save();
+        c.beginPath();
+        c.rect(PLATE.x, PLATE.y, PLATE.w, PLATE.h);
+        c.clip();
+        c.beginPath();
+        for (const v of [pz.vpDepth, pz.vpSide]) {
+          const far = v.x > vp.x ? PLATE.x : PLATE.x + PLATE.w;
+          for (let i = 0; i <= 8; i++) {
+            const y = PLATE.y + (i / 8) * PLATE.h;
+            c.moveTo(v.x, v.y); c.lineTo(far, vp.y + (y - vp.y) * 1.0);
+          }
+        }
+        c.stroke();
+        c.restore();
+        c.beginPath();
+      }
       c.stroke();
       c.setLineDash([]);
       c.strokeStyle = 'rgba(150,60,30,.8)';
       c.lineWidth = 1.4;
-      c.beginPath(); c.arc(vp.x, vp.y, 6, 0, Math.PI * 2); c.moveTo(vp.x - 11, vp.y); c.lineTo(vp.x + 11, vp.y); c.moveTo(vp.x, vp.y - 11); c.lineTo(vp.x, vp.y + 11); c.stroke();
+      c.beginPath();
+      const mark = q => { c.moveTo(q.x + 6, q.y); c.arc(q.x, q.y, 6, 0, Math.PI * 2); c.moveTo(q.x - 11, q.y); c.lineTo(q.x + 11, q.y); c.moveTo(q.x, q.y - 11); c.lineTo(q.x, q.y + 11); };
+      if (!pz) mark(vp);
+      else {
+        // the centre of vision (what the Vantage tool drags), and each vanishing point, or an
+        // arrow at the plate's edge pointing to it when it lies off the canvas
+        c.moveTo(vp.x - 7, vp.y); c.lineTo(vp.x + 7, vp.y); c.moveTo(vp.x, vp.y - 7); c.lineTo(vp.x, vp.y + 7);
+        for (const v of [pz.vpDepth, pz.vpSide]) {
+          if (v.x > PLATE.x && v.x < PLATE.x + PLATE.w) mark(v);
+          else {
+            const d = v.x > vp.x ? 1 : -1, x = d > 0 ? PLATE.x + PLATE.w - 2 : PLATE.x + 2;
+            c.moveTo(x - d * 14, vp.y - 7); c.lineTo(x, vp.y); c.lineTo(x - d * 14, vp.y + 7);
+          }
+        }
+      }
+      c.stroke();
       c.restore();
     }
     const list = alpha > 0 ? state.strokes : [];
@@ -212,6 +249,26 @@
     const b = sk.getBoundingClientRect();
     return G.P(((e.clientX - b.left) / b.width) * W, ((e.clientY - b.top) / b.height) * H);
   }
+  /* ---------- one- or two-point perspective ---------- */
+  const persp = () => (state.persp === 2 ? Persp.make(state.vp) : null);
+  // strokes are read in the one-point space the scene is built in; a line drawn flat across
+  // the picture is still a bridge (it will follow the far vanishing point)
+  function classify(pts) {
+    const pz = persp();
+    if (!pz) return Interp.classify(pts);
+    const k = Interp.classify(pts.map(pz.from));
+    return k === 'stair' && Interp.classify(pts) === 'beam' ? 'beam' : k;
+  }
+  const reclassify = () => { for (const s of state.strokes) if (s.auto !== false && s.kind !== 'shade' && s.kind !== 'light') s.kind = classify(s.pts); };
+  function setPersp(n) {
+    state.persp = n;
+    for (const b of document.querySelectorAll('[data-persp]')) { b.classList.toggle('on', +b.dataset.persp === n); b.setAttribute('aria-pressed', String(+b.dataset.persp === n)); }
+    reclassify();
+    drawSketch();
+    if (etched) etch(false);
+  }
+  for (const b of document.querySelectorAll('[data-persp]')) b.onclick = () => setPersp(+b.dataset.persp);
+
   const clampVP = p => G.P(G.clamp(p.x, PLATE.x + 20, PLATE.x + PLATE.w - 20), G.clamp(p.y, PLATE.y + 40, PLATE.y + PLATE.h - 60));
 
   function eraseAt(p) {
@@ -250,8 +307,8 @@
     const s = current;
     current = null;
     const t = s.tool;
-    s.kind = t === 'auto' ? Interp.classify(s.pts) : t;
-    state.strokes.push({ pts: s.pts, kind: s.kind, z: s.z, r: s.r });
+    s.kind = t === 'auto' ? classify(s.pts) : t;
+    state.strokes.push({ pts: s.pts, kind: s.kind, z: s.z, r: s.r, auto: t === 'auto' });
     const k = KIND[s.kind];
     setStatus(k ? `Read as ${k[0]}${t === 'auto' ? '' : ' (forced)'}.` : s.kind === 'shade' ? 'Shadow laid.' : 'Light lifted.');
     requestDraw();
@@ -303,7 +360,7 @@
     }
     const t0 = performance.now();
     ensurePaper();
-    const out = Engine.compose({ strokes: state.strokes, vp: state.vp, seed: state.seed, params: state.params, plate: PLATE, W, H });
+    const out = Engine.compose({ strokes: state.strokes, vp: state.vp, persp: state.persp, seed: state.seed, params: state.params, plate: PLATE, W, H });
     const ops = out.ops;
     numeral = out.numeral;
     ink.width = ink.width;
@@ -357,6 +414,7 @@
   function loadExample(animate, which) {
     state.strokes = which === 2 || which === true ? Example.minimal() : which === 3 ? Example.variety() : which === 4 ? Example.pillars() : which === 5 ? Example.distance() : which === 6 ? Example.random(+(qs.get('sk') || 1)) : Example.strokes();
     state.vp = G.P(Example.vp.x, Example.vp.y);
+    if (state.persp === 2) reclassify();
     drawSketch();
     etch(animate && $('#chkAnim').checked);
   }
@@ -379,6 +437,7 @@
   drawSketch();
   for (const k of Object.keys(state.params)) if (qs.has(k)) state.params[k] = +qs.get(k);
   showToggles();
+  setPersp(state.persp);
   const boot = () => {
     if (qs.has('demo')) {
       const v = qs.get('view');

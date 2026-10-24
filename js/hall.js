@@ -1,10 +1,10 @@
 'use strict';
 /*
- * The imagined prison. Around the user's sketch we build a procedural hall in true
- * one-point perspective: a flagstone floor, a timbered ceiling, arcaded side walls, a back
- * wall with a great arch and a misty vista beyond. The "Imagination" slider then grows
- * echoes of the user's bay down the hall, bridges, stairs, chains, ropes and tiny figures,
- * all out of the user's own strokes and built with the same builders.
+ * The imagined prison. Around the user's sketch lies a flagstone floor in true one-point
+ * perspective, with the vaults lost above the frame; there are no fixed walls to fight the
+ * user's own drawing. The "Imagination" slider then grows echoes of the user's bay down the
+ * hall, bridges, stairs, chains and ropes, all out of the user's own strokes and built with
+ * the same builders. The hall's width (Xl, Xr) still bounds where they may grow.
  *
  * World convention: screen = vp + (X, Y) / z, where z = 1 is the picture plane.
  */
@@ -24,23 +24,21 @@ const Hall = (() => {
       Xl: pt.x - vp.x - r.range(20, 120),
       Xr: pt.x + pt.w - vp.x + r.range(20, 120),
       Yf: sc.Yf,
-      Yc: pt.y - vp.y - r.range(150, 420),
-      // the back wall always stands behind the user's furthest architecture
+      Yc: 0, // set below: the vaults are lost above the frame
+      // the hall runs deeper than the user's furthest architecture
       zB: Math.max(r.range(4.2, 6.5), zMin + 1.6, zFar * 1.12 + 0.3),
       bay: r.range(260, 420),
       archFrac: r.range(0.38, 0.6),
       upper: r.chance(0.65),
       bayStart: r.range(0.9, 1.2),
     };
+    // no fixed walls, back wall or ceiling are drawn: they would fight the user's own
+    // perspective. The vaults stand above the frame at every depth, so piers rise out of view
+    // and chains hang from out of view; only the floor is laid.
+    H.Yc = Math.min(-60, (pt.y - 40 - vp.y) * H.zB * 1.3);
     H.proj = (X, Y, z) => P(vp.x + X / z, vp.y + Y / z);
     sc.hall = H;
-    const add = (z, draw, order) => items.push({ z, pri: 0, order, draw });
-    add(H.zB * 2.1, (pl, rr) => vista(pl, sc, rr), 0);
-    add(H.zB + 0.06, (pl, rr) => backWall(pl, sc, rr), 1);
-    add(H.zB + 0.05, (pl, rr) => floor(pl, sc, rr), 2);
-    add(H.zB + 0.05, (pl, rr) => ceiling(pl, sc, rr), 3);
-    add(H.zB + 0.04, (pl, rr) => sideWall(pl, sc, -1, rr), 4);
-    add(H.zB + 0.04, (pl, rr) => sideWall(pl, sc, 1, rr), 5);
+    items.push({ z: H.zB * 1.4, pri: 0, order: 2, draw: (pl, rr) => floor(pl, sc, rr) });
     return imagine(sc, r.fork(99), amt, zMin, user);
   }
 
@@ -49,119 +47,27 @@ const Hall = (() => {
     return { L: vp.x + H.Xl / z, R: vp.x + H.Xr / z, top: vp.y + H.Yc / z, gy: sc.floorAt(z) };
   };
 
-  function wallArch(sc, z, r, frac) {
-    const c = cross(sc, z), w = c.R - c.L, vp = sc.vp;
-    const rx = w * frac;
-    const top = c.top;
-    const by = c.gy - (c.gy - top) * r.range(0.28, 0.42);
-    let ry = Math.max(rx * r.range(1.0, 1.4), by - vp.y + 10 / z);
-    ry = Math.min(ry, by - top - rx * 0.3);
-    const cx = clamp(vp.x + r.range(-0.3, 0.3) * rx, c.L + rx * 1.3, c.R - rx * 1.3);
-    return { kind: 'arch', z, cx, by, rx, ry: Math.max(ry, rx * 0.5), t: rx * 0.17, L: c.L, R: c.R, top, gy: c.gy };
-  }
-
-  function vista(pl, sc, r) {
-    const z = sc.hall.zB * 2.1;
-    const s = wallArch(sc, z, r, r.range(0.14, 0.22));
-    Build.arch(pl, sc, Build.style({ ...s, depth: 90, walkway: false, lantern: false }, r), r);
-  }
-
-  function backWall(pl, sc, r) {
-    const s = wallArch(sc, sc.hall.zB, r, r.range(0.2, 0.28));
-    Build.arch(pl, sc, Build.style({ ...s, depth: 140, walkway: false, lantern: false }, r), r);
-  }
-
   function floor(pl, sc, r) {
-    const H = sc.hall, pr = H.proj, z0 = 0.85, z1 = H.zB;
-    const q = [pr(H.Xl, H.Yf, z0), pr(H.Xr, H.Yf, z0), pr(H.Xr, H.Yf, z1), pr(H.Xl, H.Yf, z1)];
+    // wide enough that its side edges stay outside the plate until deep in the haze
+    const H = sc.hall, pr = H.proj, z0 = 0.85, z1 = H.zB * 1.4;
+    const Xl = H.Xl * 3.5, Xr = H.Xr * 3.5;
+    const q = [pr(Xl, H.Yf, z0), pr(Xr, H.Yf, z0), pr(Xr, H.Yf, z1), pr(Xl, H.Yf, z1)];
     pl.fill([q]);
     pl.clip([q]);
     pl.hatch([q], 0, pl.spacing(0.16), { w: 0.45, a: 0.6 });
     const S = r.range(70, 110);
-    for (let X = Math.ceil(H.Xl / S) * S; X <= H.Xr; X += S) pl.ink(pr(X, H.Yf, z0), pr(X, H.Yf, z1), 0.55, 0.75, 0.3, 0.15);
-    for (let Zw = z0 * sc.f; Zw <= z1 * sc.f; Zw += S) { const z = Zw / sc.f; pl.ink(pr(H.Xl, H.Yf, z), pr(H.Xr, H.Yf, z), 0.55, 0.75, 0.3, 0.2); }
+    // the joints stop short of the horizon, so the floor fades into the haze instead of
+    // crowding into a hard band
+    const zj = H.zB * 0.75;
+    for (let X = Math.ceil(Xl / S) * S; X <= Xr; X += S) pl.ink(pr(X, H.Yf, z0), pr(X, H.Yf, zj * r.range(0.8, 1.1)), 0.55, 0.75, 0.3, 0.15);
+    for (let Zw = z0 * sc.f; Zw <= zj * sc.f; Zw += S * (1 + (Zw / sc.f) * 0.15)) { const z = Zw / sc.f; pl.ink(pr(Xl, H.Yf, z), pr(Xr, H.Yf, z), 0.55, 0.75 - 0.4 * (z / zj), 0.3, 0.2); }
     for (let i = 0; i < 6; i++) {
-      let p = pr(r.range(H.Xl, H.Xr), H.Yf, r.range(1, z1));
+      let p = pr(r.range(H.Xl, H.Xr), H.Yf, r.range(1, H.zB));
       const pts = [p];
       for (let k = 0; k < 6; k++) { p = P(p.x + r.range(-9, 9), p.y + r.range(-3, 3)); pts.push(p); }
       pl.path(pts, false, 0.55, 0.7, 0.2);
     }
     pl.unclip();
-  }
-
-  function ceiling(pl, sc, r) {
-    const H = sc.hall, pr = H.proj, f = sc.f, z0 = 0.85, z1 = H.zB;
-    const q = [pr(H.Xl, H.Yc, z0), pr(H.Xr, H.Yc, z0), pr(H.Xr, H.Yc, z1), pr(H.Xl, H.Yc, z1)];
-    pl.fill([q]);
-    pl.shade([q], 0.6, [{ vp: sc.vp }, { a: 0 }, { a: 0.6 }]);
-    const S = r.range(150, 240), bh = r.range(26, 44), bd = r.range(24, 40);
-    for (let Zw = z1 * f - S * 0.5; Zw >= z0 * f; Zw -= S) {
-      const z = Zw / f, z2 = (Zw + bd) / f;
-      const under = [pr(H.Xl, H.Yc + bh, z), pr(H.Xr, H.Yc + bh, z), pr(H.Xr, H.Yc + bh, z2), pr(H.Xl, H.Yc + bh, z2)];
-      pl.fill([under]);
-      pl.shade([under], 0.82, [{ a: 0 }, { vp: sc.vp }]);
-      const front = [pr(H.Xl, H.Yc, z), pr(H.Xr, H.Yc, z), pr(H.Xr, H.Yc + bh, z), pr(H.Xl, H.Yc + bh, z)];
-      pl.fill([front]);
-      pl.shade([front], 0.38, [{ a: 0 }]);
-      pl.outline(front, true, 0.9);
-    }
-  }
-
-  function sideWall(pl, sc, side, r) {
-    const H = sc.hall, f = sc.f, X = side < 0 ? H.Xl : H.Xr;
-    const pr = (Y, z, dx = 0) => H.proj(X + dx, Y, z);
-    const z0 = 0.75, z1 = H.zB;
-    const wall = [pr(H.Yc, z0), pr(H.Yc, z1), pr(H.Yf, z1), pr(H.Yf, z0)];
-    const spring = H.Yf - (H.Yf - H.Yc) * H.archFrac;
-    const th = 60 * side;
-    const pierW = H.bay * 0.26;
-    const ops = [], deep = [];
-    for (let i = 0; i < 40; i++) {
-      const za = H.bayStart + (i * H.bay + pierW / 2) / f, zb = H.bayStart + ((i + 1) * H.bay - pierW / 2) / f;
-      if (zb > z1 - 0.02) break;
-      const rr = ((zb - za) * f) / 2, zm = (za + zb) / 2;
-      const mk = dx => {
-        const o = [pr(H.Yf, za, dx), pr(spring, za, dx)];
-        for (let k = 1; k < 16; k++) { const a = PI - (k * PI) / 16; o.push(pr(spring - rr * Math.sin(a), zm + (rr * Math.cos(a)) / f, dx)); }
-        o.push(pr(spring, zb, dx), pr(H.Yf, zb, dx));
-        return o;
-      };
-      ops.push(mk(0));
-      deep.push(mk(th));
-      if (H.upper) {
-        const wh = rr * 0.9, ww = rr * 0.6;
-        const yb = spring - rr - (H.Yf - H.Yc) * 0.07, yt = yb - wh;
-        if (yt > H.Yc + 30) {
-          const mkw = dx => {
-            const o = [pr(yb, zm - ww / 2 / f, dx), pr(yt + ww / 2, zm - ww / 2 / f, dx)];
-            for (let k = 1; k < 10; k++) { const a = PI - (k * PI) / 10; o.push(pr(yt + ww / 2 - (ww / 2) * Math.sin(a), zm + ((ww / 2) * Math.cos(a)) / f, dx)); }
-            o.push(pr(yt + ww / 2, zm + ww / 2 / f, dx), pr(yb, zm + ww / 2 / f, dx));
-            return o;
-          };
-          ops.push(mkw(0));
-          deep.push(mkw(th));
-        }
-      }
-    }
-    for (let i = 0; i < ops.length; i++) {
-      const o = ops[i];
-      pl.fill([o]);
-      pl.shade([o], 0.88, [{ a: PI / 2 }, { a: 0.7 }, { a: -0.7 }, { a: 0 }]);
-      pl.clip([o]);
-      pl.fill([o, deep[i]]);
-      pl.shade([o, deep[i]], side < 0 ? 0.3 : 0.55, [{ vp: sc.vp }, { a: PI / 2 }]);
-      pl.path(deep[i], true, 0.6, 0.8, 0.2);
-      pl.unclip();
-    }
-    const rings = [wall, ...ops];
-    pl.fill(rings);
-    pl.shade(rings, side < 0 ? 0.5 : 0.32, [{ vp: sc.vp }, { a: PI / 2 }, { a: side < 0 ? 0.9 : -0.9 }]);
-    pl.clip(rings);
-    for (let Y = H.Yc + 20; Y < H.Yf; Y += r.range(38, 55)) pl.ink(pr(Y, z0), pr(Y, z1), 0.5, 0.7, 0.3, 0.2);
-    pl.unclip();
-    for (const o of ops) pl.outline(o, true, 0.9);
-    pl.path([pr(H.Yf, z0), pr(H.Yf, z1)], false, 0.9, 0.9, 0.3);
-    pl.path([pr(H.Yc, z1), pr(H.Yf, z1)], false, 0.9, 0.9, 0.3);
   }
 
   /*
@@ -198,8 +104,8 @@ const Hall = (() => {
           return inside(o.x - o.w, o.x + o.w) ? o : null;
         }
         case 'beam': {
-          o.x0 = s.x0 <= pt.x + 2 ? c.L - 8 : Math.max(c.L - 8, sx(s.x0, k));
-          o.x1 = s.x1 >= pt.x + pt.w - 2 ? c.R + 8 : Math.min(c.R + 8, sx(s.x1, k));
+          o.x0 = s.x0 <= pt.x + 2 ? pt.x - 20 : sx(s.x0, k);
+          o.x1 = s.x1 >= pt.x + pt.w - 2 ? pt.x + pt.w + 20 : sx(s.x1, k);
           o.y = sy(s.y, k); o.h = s.h * k;
           if (s.arc) o.arc = s.arc * k;
           o.chains = 0;
@@ -302,20 +208,6 @@ const Hall = (() => {
       if (gap < 60 / a.z || gap > pt.w * 0.5) continue;
       const y = mix(Math.max(L.y0, R.y0), Math.min(L.y1, R.y1), r.range(0.15, 0.4));
       specs.push({ kind: 'chain', z: a.z * 0.998, A: P(L.x + L.w / 2, y), B: P(R.x - R.w / 2, y + r.range(-10, 10) / a.z), sag: gap * r.range(0.12, 0.3), link: clamp(6 / a.z, 3, 8) });
-    }
-
-    // 5. a high bridge or a transverse arch from wall to wall, deeper than the user's work
-    if (r.chance(0.25 + amt * 0.3)) {
-      const z = r.range(zMin + 0.2, Math.max(zMin + 0.3, zLim - 0.3)), c = cross(sc, z);
-      if (r.chance(0.5)) {
-        const y = mix(Math.max(c.top, pt.y) + 30 / z, vp.y, r.range(0.05, 0.3));
-        const s = { kind: 'beam', z, x0: c.L - 8, x1: c.R + 8, y, h: r.range(18, 28) / z, depth: r.range(110, 220), rail: true, chains: 0 };
-        if (r.chance(0.45)) s.arc = r.range(12, 40) / z;
-        specs.push(s);
-      } else {
-        const s = wallArch(sc, z, r, r.range(0.3, 0.37));
-        specs.push({ ...s, depth: r.range(90, 180), walkway: false, lantern: false });
-      }
     }
 
     return specs;
