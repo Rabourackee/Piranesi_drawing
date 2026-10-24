@@ -96,6 +96,7 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 
 .controls .row2, .controls .row3 { display: grid; gap: 6px; margin-top: 6px; }
 .controls .row2 { grid-template-columns: 1fr 1fr; }
+.controls .toggles { margin: 2px 0 12px; }
 .controls .row3 { grid-template-columns: 1fr 1fr 1fr; }
 .slider { margin-bottom: 9px; }
 .slider label { display: flex; justify-content: space-between; font-size: 15px; }
@@ -105,12 +106,43 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .check input { accent-color: var(--accent); }
 .note { color: var(--muted); font-size: 14px; font-style: italic; line-height: 1.35; margin: 12px 0 0; }
 
+/* The corner button that shows or hides the full interface */
+.corner {
+  position: fixed; top: 12px; right: 12px; z-index: 10;
+  width: 36px; height: 36px; padding: 0; display: grid; place-items: center;
+}
+.corner svg { width: 20px; height: 20px; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; }
+.quickbar, .qstatus { display: none; }
+
+/* Minimal mode (the default): a white page, the plate, and three buttons */
+body.minimal { background: #fff; color: #222; }
+body.minimal .masthead, body.minimal .panel, body.minimal .viewbar { display: none; }
+body.minimal .app { display: block; padding: 20px 16px 12px; }
+body.minimal .frame { height: calc(100vh - 118px); background: #fff; box-shadow: 0 0 0 1px #e4e4e4; }
+body.minimal button { background: #fff; color: #222; border-color: #cfcfcf; }
+body.minimal button:hover { border-color: #222; }
+body.minimal button.on { background: #222; color: #fff; border-color: #222; }
+body.minimal button.primary { background: #222; color: #fff; border-color: #222; }
+body.minimal button.primary:hover { background: #444; }
+body.minimal button:focus-visible { outline-color: #222; }
+body.minimal .progress span { background: #222; }
+body.minimal .quickbar { display: flex; gap: 8px; justify-content: center; }
+body.minimal .quickbar button { min-width: 92px; font-size: 16px; }
+/* the toggles read as switches, not actions: a dot that fills when on, greyed out when off */
+body.minimal .quickbar button[aria-pressed] { background: #fff; color: #9a9a9a; border-color: #e0e0e0; display: inline-flex; align-items: center; justify-content: center; gap: 7px; }
+body.minimal .quickbar button[aria-pressed]::before { content: ''; width: 8px; height: 8px; border-radius: 50%; border: 1.5px solid currentColor; }
+body.minimal .quickbar button[aria-pressed="true"] { color: #222; border-color: #222; }
+body.minimal .quickbar button[aria-pressed="true"]::before { background: currentColor; }
+body.minimal .quickbar .primary { width: auto; min-width: 120px; padding: 6px 18px; font-size: 17px; }
+body.minimal .qstatus { display: block; margin: 0; text-align: center; color: #8a8a8a; font-style: italic; font-size: 14px; min-height: 1.3em; }
+
 /* Full-resolution capture mode (?full=1), used for testing */
-body.full .masthead, body.full .panel, body.full .viewbar { display: none; }
+body.full .masthead, body.full .panel, body.full .viewbar, body.full .corner, body.full .quickbar, body.full .qstatus { display: none; }
 body.full .app { display: block; padding: 0; }
 body.full .frame { height: auto; width: 800px; min-height: 0; box-shadow: none; }
 
 @media (max-width: 1100px) {
+  body.minimal .frame { height: auto; width: 100%; max-height: calc(100vh - 118px); }
   .app { grid-template-columns: 1fr; }
   .panel { position: static; }
   .stage { order: -1; }
@@ -118,4 +150,7 @@ body.full .frame { height: auto; width: 800px; min-height: 0; box-shadow: none; 
   .viewbar { flex-wrap: wrap; }
   .viewbar .seg { width: 100%; }
   .tools .toolgrid { grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); }
+}
+@media (max-width: 700px) {
+  body.minimal .app { padding-top: 58px; }
 }

@@ -85,6 +85,70 @@ const Interp = (() => {
     return 'free';
   }
 
+  /*
+   * Depth from the drawing itself. Strokes that touch form one group. A group whose lowest
+   * foot (pier base, arch legs, stair foot, figure) stops well short of the near floor is not
+   * floating: it stands further back, at the depth whose floor line passes through that foot.
+   * Returns a depth for every stroke (never nearer than the one the user chose).
+   */
+  function placeDepth(strokes, sc) {
+    const vp = sc.vp, n = strokes.length;
+    const STRUCT = { pier: 1, arch: 1, beam: 1, stair: 1, window: 1 };
+    const zOf = s => s.z || 1;
+    const boxes = strokes.map(s => (s.pts && s.pts.length && s.kind !== 'shade' && s.kind !== 'light' ? bbox(s.pts) : null));
+    const touch = (a, b, mx, my) => a.x0 - mx < b.x1 && b.x0 - mx < a.x1 && a.y0 - my < b.y1 && b.y0 - my < a.y1;
+    const hit = (b, p, m) => p.x > b.x0 - m && p.x < b.x1 + m && p.y > b.y0 - m && p.y < b.y1 + m;
+    // structural strokes on the same depth layer that touch stand together; a bridge also
+    // belongs with a pier its end nearly reaches
+    const root = strokes.map((_, i) => i);
+    const find = i => (root[i] === i ? i : (root[i] = find(root[i])));
+    const isS = i => boxes[i] && STRUCT[strokes[i].kind];
+    for (let i = 0; i < n; i++) for (let j = i + 1; j < n; j++) {
+      if (!isS(i) || !isS(j) || zOf(strokes[i]) !== zOf(strokes[j])) continue;
+      const mx = strokes[i].kind === 'beam' || strokes[j].kind === 'beam' ? 60 : 14;
+      if (touch(boxes[i], boxes[j], mx, 14)) root[find(i)] = find(j);
+    }
+    const ends = s => [s.pts[0], s.pts[s.pts.length - 1]];
+    const foot = (s, bb) => {
+      switch (s.kind) {
+        case 'pier': case 'figure': return bb.y1;
+        case 'arch': case 'stair': return Math.max(...ends(s).map(p => p.y));
+      }
+      return null;
+    };
+    const groups = new Map();
+    for (let i = 0; i < n; i++) {
+      if (!isS(i)) continue;
+      const g = groups.get(find(i)) || { foot: null, x0: Infinity, x1: -Infinity };
+      const f = foot(strokes[i], boxes[i]);
+      if (f != null) g.foot = g.foot == null ? f : Math.max(g.foot, f);
+      g.x0 = Math.min(g.x0, boxes[i].x0);
+      g.x1 = Math.max(g.x1, boxes[i].x1);
+      groups.set(find(i), g);
+    }
+    // never so deep that the group would be wider than the hall there
+    const back = (z, f, w = 0) => {
+      if (f == null || sc.floorAt(z) - f <= 45) return z;
+      const fit = sc.plate.w * 0.9 / Math.max(1, w);
+      return clamp(f > vp.y + 10 ? sc.Yf / (f - vp.y) : 5, z, Math.max(z, Math.min(5, fit)));
+    };
+    const out = strokes.map(zOf);
+    for (let i = 0; i < n; i++) if (isS(i)) { const g = groups.get(find(i)); out[i] = back(zOf(strokes[i]), g.foot, g.x1 - g.x0); }
+    // hangings, ropes and figures go with what holds them: the top of a chain, a figure's feet
+    for (let i = 0; i < n; i++) {
+      const s = strokes[i];
+      if (!boxes[i] || isS(i)) continue;
+      const bb = boxes[i];
+      const anchors = s.kind === 'figure' ? [P(bb.cx, bb.y1)] : s.kind === 'hang' ? [P(bb.cx, bb.y0)] : ends(s);
+      let k = -1;
+      strokes.forEach((t, j) => {
+        if (isS(j) && anchors.some(p => hit(boxes[j], p, 14)) && (k < 0 || boxes[j].w * boxes[j].h < boxes[k].w * boxes[k].h)) k = j;
+      });
+      out[i] = k >= 0 ? out[k] : s.kind === 'figure' ? back(zOf(s), bb.y1) : zOf(s);
+    }
+    return out;
+  }
+
   /* Turns a stored stroke into a builder spec, or null. */
   function toSpec(st, sc, r) {
     const pts = st.pts, z = st.z || 1, kind = st.kind;
@@ -171,5 +235,5 @@ const Interp = (() => {
     return null;
   }
 
-  return { analyze, classify, toSpec };
+  return { analyze, classify, toSpec, placeDepth };
 })();

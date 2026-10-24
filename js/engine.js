@@ -38,6 +38,9 @@ const Engine = (() => {
     };
     const penOpt = { density: p.density, hand: p.hand ?? 0.7, sketch: p.sketch ?? 0.7 };
     sc.floorAt = z => vp.y + sc.Yf / z;
+    sc.plants = p.plants !== 0;
+    sc.people = p.people !== 0;
+    Wear.setPlants(sc.plants);
 
     const pl = new Plate.Plate(rand.fork(7), { ...penOpt, inkFade: 1 - p.age * 0.12 });
     pl.clip([G.rect(plate.x, plate.y, plate.w, plate.h)]);
@@ -53,10 +56,12 @@ const Engine = (() => {
     pl.ops.push(...cl.ops);
 
     // 1. read the user's strokes
+    // a part that stops short of the near floor stands further back, on the distant floor
+    const depths = Interp.placeDepth(st.strokes, sc);
     const userSpecs = [];
     st.strokes.forEach((s, i) => {
       if (s.kind === 'shade' || s.kind === 'light') return;
-      const spec = Interp.toSpec(s, sc, new Rng.Rand((st.seed * 31 + i * 977) >>> 0));
+      const spec = Interp.toSpec({ ...s, z: depths[i] }, sc, new Rng.Rand((st.seed * 31 + i * 977) >>> 0));
       if (!spec || !Build[spec.kind]) return;
       spec.order = 1000 + i;
       spec.user = true;
@@ -65,16 +70,28 @@ const Engine = (() => {
     // 2. imagine the hall behind the user's near architecture, never inside it
     const zMin = G.clamp(Math.max(1.25, ...userSpecs.filter(s => s.z <= 1.2).map(s => depthEnd(s, sc) * 1.04)), 1.25, 3.4);
     const items = [];
-    const imagined = Hall.build(sc, rand.fork(11), items, p.imagination, zMin);
+    const zFar = Math.max(1, ...userSpecs.map(s => depthEnd(s, sc)));
+    // nothing imagined may stand in front of the user's distant architecture and hide it
+    const userBoxes = userSpecs.map(s => ({ z: s.z, b: Structure.boxOf(s) })).filter(u => u.b);
+    const hides = s => {
+      const b = Structure.boxOf(s);
+      return b && userBoxes.some(u => s.z < u.z * 0.97 && b.x0 < u.b.x1 + 20 && u.b.x0 - 20 < b.x1 && b.y0 < u.b.y1 + 20 && u.b.y0 - 20 < b.y1);
+    };
+    const imagined = Hall.build(sc, rand.fork(11), items, p.imagination, zMin, zFar, userSpecs).filter(s => !hides(s));
     imagined.forEach((s, i) => { s.order = 20 + i; });
     // 3. make everything structurally sound, then queue it for drawing
     // every element gets its own style (square or round pier, flat or arched bridge, ...)
     for (const s of userSpecs.concat(imagined)) Build.style(s, rand.fork(700 + s.order));
     const specs = Structure.resolve(userSpecs.concat(imagined), sc, rand.fork(55), p.imagination);
+    if (st.planOnly) return { specs, sc, items };
     specs.forEach((s, i) => {
       if (!s.style) Build.style(s, rand.fork(900 + i));
       if (s.order == null) s.order = 5000 + i;
-      items.push({ z: s.z, pri: PRI[s.kind] ?? 3, order: s.order, draw: (pl2, r) => Build[s.kind](pl2, sc, s, r) });
+      items.push({ z: s.z, pri: PRI[s.kind] ?? 3, order: s.order, draw: (pl2, r) => {
+        Build[s.kind](pl2, sc, s, r);
+        // plants root in the corners of what was just drawn
+        if (sc.plants) Flora.grow(pl2, sc, s, r.fork(77));
+      } });
     });
     items.sort((a, b) => b.z - a.z || a.pri - b.pri || a.order - b.order);
 

@@ -34,7 +34,11 @@ You can also force any element with the tool buttons. Other tools:
 - **Shadow and Light** brushes paint the tone directly. Light also cuts shafts through the atmosphere.
 - **Erase** removes strokes you touch.
 - **Vantage** drags the vanishing point. Every element and the whole hall re-project to it.
+- **A quiet page by default.** The page opens on white with only the plate, **Etch**, **Plants** and **People**. The ☰ button in the top-right corner shows the full set of tools, depth layers, sliders and views, and hides them again. The page remembers your choice, and `?ui=full` opens with everything shown. Shortcuts work in both modes.
+- **Plants** (P) switches vegetation on or off. Shrubs burst from broken tops and the ends of cornices and bridges, ivy trails from the corners of bridges and arches, and weeds gather at the feet of piers and stairs. Each element grows its plants right after it is drawn (`js/flora.js`), so nearer things still hide them. How much grows follows the Ruin & wear slider.
+- **People** (O) lets the system place the figures itself: small groups talking and pointing on bridges and on the floor, someone climbing a stair, a prisoner chained at the foot of a pier. Figures are only put where they stand on something and are not inside a wall. The Figure tool still adds your own.
 - **Depth layer** puts new strokes Near, Middle or Far. Far strokes are thinner and fogged.
+- **Depth from the drawing.** You do not have to draw down to the bottom of the plate. A pier, arch or stair that stops short of the near floor is read as standing further back, on the floor line that passes through its foot. Parts that touch move back together, and chains and figures follow whatever holds them. Nothing imagined is placed in front of a distant group, and the back wall always stands behind it.
 
 Keyboard shortcuts: `A`, `1` to `9`, `S`, `L`, `E` and `V` pick tools. `Enter` etches,
 `R` reimagines with a new seed, and `Ctrl+Z` undoes.
@@ -56,24 +60,35 @@ Keyboard shortcuts: `A`, `1` to `9`, `S`, `L`, `E` and `V` pick tools. `Enter` e
    new layer starts only at a darker threshold, the way etchers build value.
 4. **The imagined prison** (`js/hall.js`). Around your sketch, a seeded hall is built in 3D. It
    has a flagstone floor, a timbered ceiling, arcaded side walls, a back wall with a great
-   arch and a misty vista beyond. The **Imagination** slider scatters bridges, stairs, piers,
-   transverse arches, pulleys, ropes and figures through its depth, using the same builders
-   as your strokes. Distance fades the ink as aerial perspective.
+   arch and a misty vista beyond. Everything else grows out of what you drew, so an empty
+   sketch etches nothing. The **Imagination** slider sets how far it grows:
+   - **Echoes.** Your bay repeats down the hall in true perspective, scaled about the
+     vanishing point, so a pier becomes a receding colonnade and an arch a receding arcade.
+   - **Bridges** join pairs of piers at the same depth.
+   - **Stairs** climb from the floor to a bridge's free end, or a spiral stair carries it.
+   - **Tackle and figures.** Lanterns, chains and ropes hang from real soffits, and figures
+     stand on decks and on the floor beside the piers.
+   - **Crossings.** At most one high bridge or transverse arch crosses the hall from wall to
+     wall, deeper than your own work.
+   Distance fades the ink as aerial perspective.
 5. **Structural sense** (`js/structure.js`). Before anything is drawn, every element, yours
-   and imagined, is made to stand up. Piers rest on the floor or a beam. Arches spring from
+   and imagined, is made to stand up. First, each group of touching strokes gets its depth
+   from its lowest foot (`Interp.placeDepth`), so a short pier stands on a distant floor
+   instead of being stretched down to the near one. No group goes so deep that it would be
+   wider than the hall there. Piers rest on the floor or a beam. Arches spring from
    what lies under their legs. Stairs start on a surface and arrive on a landing, which is
    built if missing. Bridges are anchored at both ends by the frame edge, a hall wall or a
    solid they butt into, or a new pier is raised under the free end. Windows are cut into
    a wall. Chains, lanterns, ropes and pulleys hang from a soffit, an arch or the vault,
-   and figures stand on floors, bridges, landings and treads. Imagined elements start
-   behind your own vaults and keep to side lanes along the walls, so the central view
-   stays open. Galleries, switchback stairs, colonnades and tackle line the flanks, and at
-   most one bridge and one wide transverse arch cross the hall.
+   and figures stand on floors, bridges, landings and treads. A bridge end never rests on
+   another bridge: where two meet, a pier rises under the joint. Finally an audit starts
+   from the floor, the hall walls, the vaults and the frame, and follows what touches what
+   at the same depth. Anything imagined that is not held up this way is not built.
    Parts are joined the way a builder would join them:
    - **Wound stairs.** Great piers get stairs wound around them. Flights alternate in front of and behind the shaft, turn on landings corbelled out of its flanks, and arrive at a door cut into the pier.
    - **Beams growing out of supports.** A beam or landing that meets a pier, a wall or the hall wall grows out of it on a corbel, a scrolled console or a timber brace. Short landings cantilever on a row of consoles instead of standing on props.
-   - **Arches.** Arches spring from neighbouring piers, and colonnade piers carry a great arch between them.
-   - **Landings.** A stair with nowhere to arrive reaches for the nearest pier or wall.
+   - **Arches.** Arches spring from neighbouring piers.
+   - **Stairs always arrive somewhere.** Every flight starts on the floor or a deck and ends on a platform joined to the main structure. A missing landing reaches back to a pier or wall just behind the top, or on to the next support ahead. Failing that, it runs into the hall wall as a gallery, propped midway if long. Failing that, it stands on a landing tower, a broad masonry pier of its own. Long flying flights rest on piers under their stringer, and flights wound around a pier hang on its landings. The audit drops any imagined stair whose foot or head is not held.
 6. **Variety** (`Build.style` in `js/build.js`). Each element gets its own look from the seed:
    - **Piers:** square rusticated, banded with worm-eaten rustication, rubble, pilastered, round fluted columns, or round towers with curved coursing and arrow slits. Capitals and plinths vary too.
    - **Bridges:** flat, carried on an arch, or timber. Railings can be balusters, wrought iron, a solid parapet, timber posts with rope, or a broken balustrade.
@@ -105,7 +120,8 @@ saved file name.
 | `js/interpret.js` | Stroke analysis and classification |
 | `js/build.js` | Prism extrusion, masonry, element styles and all architectural elements |
 | `js/wear.js` | Chips, broken tops, cavities, cracks, streaks, vegetation and rubble |
-| `js/structure.js` | Makes every element structurally supported |
+| `js/structure.js` | Makes every element structurally supported, and places the people |
+| `js/flora.js` | Plants rooted in the corners of the structure |
 | `js/hall.js` | The procedurally imagined prison |
 | `js/tone.js` | Atmospheric darkness field and tonal hatching |
 | `js/plate.js` | Ink-line primitives, hatching and playback |
@@ -113,6 +129,6 @@ saved file name.
 | `js/rng.js`, `js/geom.js` | Seeded random and noise, and 2D geometry |
 | `js/example.js` | Demo sketches |
 
-URL options for testing: `?demo=1` loads the example, `?demo=2` a sparse one, `?demo=3` a sampler of curved and varied forms, `?demo=4` two great pillars for the wound stairs, and `?demo=0` an empty sketch. Any slider can be set by name, for example `&wear=1`, and `&vpx=…&vpy=…` sets the vanishing point. Add
+URL options for testing: `?demo=1` loads the example, `?demo=2` a sparse one, `?demo=3` a sampler of curved and varied forms, `?demo=4` two great pillars for the wound stairs, `?demo=5` parts drawn short of the floor that stand in the distance, `?demo=6&sk=N` a random test sketch, and `?demo=0` an empty sketch. Any slider can be set by name, for example `&wear=1`, `&plants=0` and `&people=0` turn those off, and `&vpx=…&vpy=…` sets the vanishing point. Add
 `&noanim=1` to skip the animation, `&seed=N` to fix the seed, `&view=etch|overlay|sketch`
 to pick a view, and `&full=1` for a bare 800px capture view.

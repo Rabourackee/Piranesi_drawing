@@ -182,8 +182,13 @@ const Wear = (() => {
     pl.path(pts.map(t => P(t.x + 0.9, t.y + 0.6)), false, 0.35, 0.4, 0.25);
   }
 
+  /* Plants can be switched off as a whole (the Plants button). */
+  let plants = true;
+  const setPlants = on => { plants = !!on; };
+
   /* Grass and weeds sprouting from a ledge at (x, y). */
   function tuft(pl, x, y, size, r) {
+    if (!plants) return;
     const n = r.int(4, 9);
     for (let i = 0; i < n; i++) {
       const a = -HALF + r.range(-1.1, 1.1), len = size * r.range(0.35, 1), bend = r.range(-0.6, 0.6);
@@ -194,6 +199,7 @@ const Wear = (() => {
   }
   /* A leafy bush rooted in a crack: a clump of small leaves, darker underneath. */
   function shrub(pl, x, y, size, r) {
+    if (!plants) return;
     const n = Math.round(clamp(size / 2.2, 6, 26));
     const leaves = [];
     for (let i = 0; i < n; i++) {
@@ -212,6 +218,7 @@ const Wear = (() => {
   }
   /* A creeper hanging from an edge. */
   function vine(pl, x, y, len, r) {
+    if (!plants) return;
     const pts = [P(x, y)];
     let p = P(x, y), s = r.next() * 10;
     for (let i = 0; i < len / 4; i++) {
@@ -251,6 +258,7 @@ const Wear = (() => {
   }
   /* Vegetation along a top edge from x0 to x1 at height y(x). */
   function overgrow(pl, x0, x1, yAt, scale, amt, r) {
+    if (!plants) return;
     const n = Math.floor(((x1 - x0) / 90) * amt * 1.5 + r.next() * amt);
     for (let i = 0; i < n; i++) {
       const x = r.range(x0 + 4, x1 - 4), y = yAt(x);
@@ -328,5 +336,5 @@ const Wear = (() => {
     return out;
   }
 
-  return { blob, spall, patches, roughen, chip, ruinTop, vermiculate, cavity, streaks, crack, tuft, shrub, vine, rubble, overgrow };
+  return { setPlants, blob, spall, patches, roughen, chip, ruinTop, vermiculate, cavity, streaks, crack, tuft, shrub, vine, rubble, overgrow };
 })();

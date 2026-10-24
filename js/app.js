@@ -22,7 +22,7 @@
     vp: G.P(W * 0.5, H * 0.57),
     seed: +qs.get('seed') || 1 + Math.floor(Math.random() * 99999),
     view: 'sketch',
-    params: { depth: 1, imagination: 0.75, darkness: 0.7, density: 1, fog: 0.5, wear: 0.55, hand: 0.7, sketch: 0.7, age: 0.35, brush: 34 },
+    params: { depth: 1, imagination: 0.75, darkness: 0.7, density: 1, fog: 0.5, wear: 0.55, hand: 0.7, sketch: 0.7, age: 0.35, brush: 34, plants: 1, people: 1 },
   };
 
   const TOOLS = [
@@ -93,6 +93,31 @@
     show();
     inp.addEventListener('input', () => { state.params[key] = +inp.value; show(); });
     inp.addEventListener('change', () => { if (key !== 'brush' && etched) etch(false); });
+  }
+
+  /* ---------- plants and people ---------- */
+  // each toggle appears twice: in the full panel and in the minimal bar
+  const toggles = { plants: [$('#btnPlants'), $('#qPlants')], people: [$('#btnPeople'), $('#qPeople')] };
+  const showToggles = () => {
+    for (const [k, bs] of Object.entries(toggles)) for (const b of bs) { b.classList.toggle('on', !!state.params[k]); b.setAttribute('aria-pressed', String(!!state.params[k])); }
+  };
+  const flip = k => { state.params[k] = state.params[k] ? 0 : 1; showToggles(); if (etched) etch(false); };
+  for (const [k, bs] of Object.entries(toggles)) for (const b of bs) b.onclick = () => flip(k);
+
+  /* ---------- minimal or full interface ---------- */
+  const setMinimal = on => {
+    document.body.classList.toggle('minimal', on);
+    $('#btnUI').setAttribute('aria-expanded', String(!on));
+    $('#btnUI').title = on ? 'Show all tools and settings' : 'Hide the tools and settings';
+    $('#btnUI').setAttribute('aria-label', $('#btnUI').title);
+    try { localStorage.setItem('carceri.ui', on ? 'minimal' : 'full'); } catch (e) { /* storage unavailable */ }
+  };
+  $('#btnUI').onclick = () => setMinimal(!document.body.classList.contains('minimal'));
+  {
+    let saved = null;
+    try { saved = localStorage.getItem('carceri.ui'); } catch (e) { /* storage unavailable */ }
+    const want = qs.get('ui') || saved;
+    if (want === 'full') setMinimal(false);
   }
 
   /* ---------- views ---------- */
@@ -238,7 +263,7 @@
   /* ---------- etching ---------- */
   let paper = null, paperKey = '', etched = false, job = 0, liveTimer = 0, numeral = '';
   const prog = $('#progress span');
-  const setStatus = t => { $('#status').textContent = t; };
+  const setStatus = t => { $('#status').textContent = t; $('#qstatus').textContent = t; };
 
   function scheduleLive() {
     clearTimeout(liveTimer);
@@ -269,6 +294,13 @@
   function etch(animate) {
     if (job) { cancelAnimationFrame(job); job = 0; }
     clearTimeout(liveTimer);
+    // the prison grows only out of what is drawn: an empty sketch etches nothing
+    if (!state.strokes.some(s => s.kind !== 'shade' && s.kind !== 'light')) {
+      etched = false;
+      setView('sketch');
+      setStatus('Nothing to etch yet: draw a pier, an arch, a stair or a bridge first.');
+      return;
+    }
     const t0 = performance.now();
     ensurePaper();
     const out = Engine.compose({ strokes: state.strokes, vp: state.vp, seed: state.seed, params: state.params, plate: PLATE, W, H });
@@ -306,6 +338,7 @@
 
   /* ---------- buttons & keys ---------- */
   $('#btnEtch').onclick = () => etch($('#chkAnim').checked);
+  $('#qEtch').onclick = () => etch($('#chkAnim').checked);
   $('#btnReimagine').onclick = () => { state.seed = 1 + Math.floor(Math.random() * 99999); etch($('#chkAnim').checked); };
   $('#btnExample').onclick = () => loadExample(true);
   $('#btnUndo').onclick = undo;
@@ -322,7 +355,7 @@
   };
   function undo() { state.strokes.pop(); drawSketch(); scheduleLive(); }
   function loadExample(animate, which) {
-    state.strokes = which === 2 || which === true ? Example.minimal() : which === 3 ? Example.variety() : which === 4 ? Example.pillars() : Example.strokes();
+    state.strokes = which === 2 || which === true ? Example.minimal() : which === 3 ? Example.variety() : which === 4 ? Example.pillars() : which === 5 ? Example.distance() : which === 6 ? Example.random(+(qs.get('sk') || 1)) : Example.strokes();
     state.vp = G.P(Example.vp.x, Example.vp.y);
     drawSketch();
     etch(animate && $('#chkAnim').checked);
@@ -335,6 +368,8 @@
     if (e.ctrlKey || e.metaKey || e.altKey) return;
     if (k === 'enter') etch($('#chkAnim').checked);
     else if (k === 'r') $('#btnReimagine').onclick();
+    else if (k === 'p') flip('plants');
+    else if (k === 'o') flip('people');
     else if (KEYS[k]) setTool(KEYS[k]);
   });
 
@@ -343,6 +378,7 @@
   if (qs.has('full')) document.body.classList.add('full');
   drawSketch();
   for (const k of Object.keys(state.params)) if (qs.has(k)) state.params[k] = +qs.get(k);
+  showToggles();
   const boot = () => {
     if (qs.has('demo')) {
       const v = qs.get('view');

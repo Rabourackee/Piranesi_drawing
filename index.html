@@ -10,7 +10,11 @@
   <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400&family=IM+Fell+English:ital@0;1&family=IM+Fell+English+SC&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="css/style.css">
 </head>
-<body>
+<body class="minimal">
+  <button id="btnUI" class="corner" title="Show all tools and settings" aria-label="Show all tools and settings" aria-expanded="false">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+  </button>
+
   <header class="masthead">
     <h1>Carceri d’Invenzione</h1>
     <p>Sketch a prison of the imagination. A procedural burin does the rest: no AI, only geometry, perspective and hatching.</p>
@@ -58,6 +62,12 @@
         <canvas id="sketch" aria-label="Sketch canvas"></canvas>
         <div class="progress" id="progress"><span></span></div>
       </div>
+      <div class="quickbar" id="quickbar">
+        <button class="primary" id="qEtch" title="Etch the plate (Enter)">Etch</button>
+        <button id="qPlants" class="on" aria-pressed="true" title="Plants (P)">Plants</button>
+        <button id="qPeople" class="on" aria-pressed="true" title="People (O)">People</button>
+      </div>
+      <p class="qstatus" id="qstatus">Draw on the plate, then press Etch.</p>
     </section>
 
     <aside class="panel controls" aria-label="Etching controls">
@@ -73,6 +83,10 @@
       </div>
 
       <h2>The plate</h2>
+      <div class="row2 toggles">
+        <button id="btnPlants" class="on" aria-pressed="true" title="Shrubs, ivy and weeds rooted in the corners of the ruin (P)">Plants</button>
+        <button id="btnPeople" class="on" aria-pressed="true" title="Figures placed on floors, bridges, landings and stairs (O)">People</button>
+      </div>
       <div id="sliders"></div>
 
       <label class="check"><input type="checkbox" id="chkAnim" checked> Animate the burin</label>
@@ -92,6 +106,7 @@
   <script src="js/interpret.js"></script>
   <script src="js/hall.js"></script>
   <script src="js/structure.js"></script>
+  <script src="js/flora.js"></script>
   <script src="js/tone.js"></script>
   <script src="js/paper.js"></script>
   <script src="js/engine.js"></script>

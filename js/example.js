@@ -67,5 +67,44 @@ const Example = (() => {
     add(line(P(600, 60), P(598, 990)));
     return out;
   }
-  return { strokes, minimal, variety, pillars, vp: P(415, 600) };
+  /* Parts drawn short of the floor: they stand in the distance, not on stilts. */
+  function distance() {
+    const r = new Rng.Rand(9);
+    const out = [];
+    const add = (pts, z = 1) => { const j = jit(pts, r, 1); out.push({ pts: j, z, kind: Interp.classify(j) }); };
+    add(line(P(140, 60), P(142, 990)));
+    add(line(P(330, 150), P(332, 760)));
+    add(line(P(470, 150), P(468, 760)));
+    add(line(P(330, 330), P(470, 332)));
+    add(G.ellipse(620, 690, 70, 130, Math.PI, 0, 30));
+    return out;
+  }
+  /* A random sketch of the kind a person might draw, for testing (demo=6&sk=N). */
+  function random(seed) {
+    const r = new Rng.Rand(seed);
+    const out = [];
+    const add = (pts, kind) => { const j = jit(pts, r, 1.2); out.push({ pts: j, z: 1, kind: kind || Interp.classify(j) }); };
+    const n = r.int(2, 6);
+    const piers = [];
+    for (let i = 0; i < n; i++) {
+      const k = r.pick(['pier', 'pier', 'pier', 'arch', 'beam', 'stair', 'beam']);
+      if (k === 'pier') {
+        const x = r.range(80, 720), y0 = r.chance(0.5) ? r.range(50, 120) : r.range(150, 450), y1 = r.chance(0.5) ? r.range(940, 990) : r.range(600, 900);
+        add(line(P(x, y0), P(x + r.range(-3, 3), y1)));
+        piers.push({ x, y0, y1 });
+      } else if (k === 'arch') {
+        const cx = r.range(200, 600), rx = r.range(60, 220), by = r.range(550, 980), ry = rx * r.range(0.8, 1.6);
+        add(G.ellipse(cx, by, rx, ry, Math.PI, 0, 30));
+      } else if (k === 'beam') {
+        let x0 = r.range(60, 420), x1 = x0 + r.range(120, 380), y = r.range(200, 700);
+        if (piers.length >= 2 && r.chance(0.6)) { const [a, b] = [piers[0], piers[1]].sort((p, q) => p.x - q.x); x0 = a.x; x1 = b.x; y = r.range(Math.max(a.y0, b.y0) + 30, Math.min(a.y1, b.y1) - 30); }
+        if (x1 - x0 > 60) add(line(P(x0, y), P(x1, y + r.range(-4, 4))));
+      } else {
+        const x = r.range(150, 650), y = r.range(780, 990), sw = r.range(16, 30) * r.sign(), sh = r.range(16, 26);
+        add(steps(x, y, r.int(4, 9), sw, sh));
+      }
+    }
+    return out;
+  }
+  return { strokes, minimal, variety, pillars, distance, random, vp: P(415, 600) };
 })();

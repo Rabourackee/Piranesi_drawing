@@ -38,6 +38,8 @@ const Structure = (() => {
     return null;
   }
 
+  const OFF = [[0, 0], [0, 6], [0, -6], [6, 0], [-6, 0], [0, 12]];
+
   function resolve(specs, sc, r = new Rng.Rand(1), amt = 0.7) {
     const pt = sc.plate, vp = sc.vp, H = sc.hall;
     const out = specs.slice();
@@ -70,6 +72,8 @@ const Structure = (() => {
       if (s.kind === 'arch') {
         c.push(P(q.x, intradosY(s, q.x)), P(s.cx - s.rx, Math.max(q.y, s.by)), P(s.cx + s.rx, Math.max(q.y, s.by)));
       } else if (s.kind === 'stair') c.push(P(q.x, Build.stairTop(s, q.x)));
+      else if (s.kind === 'beam') c.push(P(q.x, Build.beamTop(s, q.x)), P(q.x, Build.beamBottom(s, q.x)));
+      if (!c.length) return q;
       let best = c[0];
       for (const k of c) if (G.dist(k, p) < G.dist(best, p)) best = k;
       return best;
@@ -177,7 +181,6 @@ const Structure = (() => {
       const yTop = gy - k * hF;
       const dh = clamp(hF * 0.7, 16, 90);
       if (yTop - dh > p.y0 + w * 0.5) p.door = { x: p.x + side * w * 0.08, y: yTop, w: clamp(w * 0.38, 8, 40), h: dh };
-      if (r.chance(0.6)) add({ kind: 'figure', z: z * 0.99, x: p.x + side * (w / 2 + ext * 0.6), y: yTop, h: 10 });
     }
     for (const p of all('pier')) {
       if (p.y1 - p.y0 < p.w * 3.5 || p.w < 34 / Math.sqrt(p.z)) continue;
@@ -225,23 +228,49 @@ const Structure = (() => {
         }
       }
       if (E.y <= ceilY(z) + 10 || E.x <= pt.x || E.x >= pt.x + pt.w) return; // continues out of view
-      // nothing to arrive on: build a landing, reaching for the nearest pier or wall if there is one
+      // nothing to arrive on: build a landing that joins the main structure. It reaches for a pier
+      // or wall just behind the top, else runs on to the next support ahead or into the hall
+      // wall as a gallery; only when that is too far does it stand on a pier of its own.
       const rise = st.S.y - E.y, h = clamp(rise / 12, 8, 20), depth = clamp(rise * 0.6, 60, 200);
-      const reach = clamp(rise * 1.2, 60, 260);
-      let best = null;
-      for (const d of [1, -1]) {
-        for (let k = 6; k <= reach; k += 4) {
-          if (solidAt(z, P(E.x + d * k, E.y + h * 0.5), st)) { if (!best || k < best.k) best = { d, k }; break; }
-        }
-      }
-      if (best) {
-        const far = E.x + best.d * (best.k + 3);
-        add({ kind: 'beam', z, x0: Math.min(E.x - best.d * 4, far), x1: Math.max(E.x - best.d * 4, far), y: E.y, h, rail: true, chains: 0, landing: true, cantilever: true, depth });
+      const dir = Math.sign(E.x - st.S.x) || 1;
+      const probe = (d, max) => {
+        for (let k = 6; k <= max; k += 4) if (solidAt(z, P(E.x + d * k, E.y + h * 0.5), st)) return k;
+        return null;
+      };
+      const toWall = dir > 0 ? wallR(z) - E.x : E.x - wallL(z);
+      const back = probe(-dir, clamp(rise * 0.6, 40, 160));
+      const fwd = probe(dir, Math.max(0, toWall));
+      const land = (d, k, o = {}) => {
+        const far = E.x + d * k;
+        return add({ kind: 'beam', z, x0: Math.min(E.x - d * 4, far), x1: Math.max(E.x - d * 4, far), y: E.y, h, rail: true, chains: 0, landing: true, cantilever: true, depth, ...o });
+      };
+      const reach = Math.min(pt.w * 0.32, 240 / Math.sqrt(z));
+      const prop = (x, w) => add({ kind: 'pier', z: z * 1.002, x, w, y0: E.y + h, y1: surfaceBelow(z, x, E.y + h + 1, st).y, ring: false });
+      if (back != null && (fwd == null || back < fwd)) { land(-dir, back + 3); return; }
+      if (fwd != null && fwd < reach * 1.3) { land(dir, fwd + 3); return; }
+      if (toWall > 0 && toWall < reach) {
+        // a gallery into the hall wall; a long one rests on a pier along the way
+        land(dir, toWall + 8, { gallery: true });
+        if (toWall > 140 / Math.sqrt(z)) prop(E.x + dir * toWall * 0.5, clamp(h * 2.6, 14, 50));
         return;
       }
-      const dir = Math.sign(E.x - st.S.x) || 1;
-      const len = clamp(rise * 0.35, 36, 150);
-      add({ kind: 'beam', z, x0: dir > 0 ? E.x - 4 : E.x - len, x1: dir > 0 ? E.x + len : E.x + 4, y: E.y, h, rail: true, chains: 0, landing: true, depth });
+      // otherwise the flight arrives on a landing tower: a broad masonry pier under the landing
+      const len = clamp(rise * 0.32, 30 / Math.sqrt(z), 120);
+      land(dir, len, { cantilever: false, tower: true });
+      prop(E.x + dir * len * 0.45, len * 0.85);
+    }
+    /* a long flying flight is carried on piers under its stringer */
+    function propStair(st) {
+      if (st.solid || st.wrap) return; // wound flights hang on their pier and its landings
+      const z = st.z, run = Math.abs(st.E.x - st.S.x), { rh } = Build.stairProfile(st);
+      const span = 130 / Math.sqrt(z);
+      if (run < span) return;
+      const n = Math.floor(run / span), th = Math.max(rh * 1.6, 6);
+      for (let i = 1; i <= n; i++) {
+        const x = G.lerp(st.S, st.E, i / (n + 1)).x, uy = Build.stairTop(st, x) + th;
+        const foot = surfaceBelow(z, x, uy + 1, st).y;
+        if (foot - uy > 10) add({ kind: 'pier', z: z * 1.002, x, w: clamp(rh * 2.4, 10, 44), y0: uy, y1: foot, ring: false });
+      }
     }
     /* keep a curved stringer path in step with the adjusted ends */
     function syncPath(st) {
@@ -250,11 +279,13 @@ const Structure = (() => {
       else st.path[0] = st.S;
       st.path[st.path.length - 1] = st.E;
     }
-    all('stair').sort((a, b) => b.S.y - a.S.y).forEach(st => { fixStair(st); syncPath(st); });
+    all('stair').sort((a, b) => b.S.y - a.S.y).forEach(st => { fixStair(st); syncPath(st); propStair(st); });
 
     /* ----- 4. bridges and beams: anchor both ends ----- */
     function fixBeam(b) {
       const z = b.z, len = b.x1 - b.x0;
+      // a bridge end needs a pier, a wall or the ground: another bridge does not count
+      const solidAt = (zz, p, except) => bodies(zz, except).some(o => o.s.kind !== 'beam' && contains(o, p));
       if (Build.beamBottom(b, (b.x0 + b.x1) / 2) >= sc.floorAt(z) - 3) return;
       const state = {};
       b.corbels = [];
@@ -364,8 +395,10 @@ const Structure = (() => {
     }
 
     /* ----- 7. people stand on things ----- */
+    if (sc.people) populate();
     const peopleSurfaces = () => out.flatMap(s => surfacesOf(s, true));
     for (const f of all('figure')) {
+      if (f.gen) continue; // placed on a surface already
       const x = f.x, y = f.y;
       let best = null;
       for (const sf of peopleSurfaces()) {
@@ -390,8 +423,125 @@ const Structure = (() => {
       }
       f.h = clamp((0.13 * sc.Yf) / f.z, 6, 60);
     }
-    return out;
+    /* The people of the prison: small groups talking and pointing on bridges and on the
+       floor, someone climbing a stair, a prisoner chained at the foot of a pier. */
+    function populate() {
+      const N = r.int(4, 8), placed = [];
+      const hOf = z => clamp((0.13 * sc.Yf) / z, 6, 60);
+      const put = (z, x, y, pose, facing, extra = {}) => {
+        const h = hOf(z);
+        if (x < pt.x + 12 || x > pt.x + pt.w - 12 || y > pt.y + pt.h - 3 || y - h < pt.y + 10) return false;
+        if (solidAt(z, P(x, y - h * 0.55)) || solidAt(z, P(x, y - h * 0.15))) return false;
+        if (placed.some(q => near(q.z, z) && Math.abs(q.x - x) < h * 0.45 && Math.abs(q.y - y) < h)) return false;
+        const f = add({ kind: 'figure', z: z * 0.997, x, y, h, pose, facing, gen: true, ...extra });
+        placed.push(f);
+        return true;
+      };
+      // a group of one to three: the first points, the others turn toward it
+      const group = (z, x, y, yAt, dir) => {
+        const n = r.chance(0.35) ? 1 : r.chance(0.6) ? 2 : 3, h = hOf(z);
+        let ok = 0;
+        for (let i = 0; i < n; i++) {
+          const xx = x + dir * i * h * r.range(0.45, 0.7);
+          if (put(z, xx, yAt ? yAt(xx) : y, i === 0 ? r.pick(['point', 'point', 'stand', 'staff']) : r.pick(['stand', 'hunch', 'staff', 'stride']), i === 0 ? dir : -dir)) ok++;
+        }
+        return ok;
+      };
+      const decks = out.filter(s => s.kind === 'beam' && Math.min(s.x1, pt.x + pt.w) - Math.max(s.x0, pt.x) > 60 / Math.sqrt(s.z));
+      const flights = out.filter(s => s.kind === 'stair' && Math.abs(s.E.x - s.S.x) > 30);
+      const footed = out.filter(s => s.kind === 'pier' && Math.abs(s.y1 - sc.floorAt(s.z)) < 3 && s.w > 14);
+      let n = 0;
+      for (let tries = 0; n < N && tries < 50; tries++) {
+        const k = r.pick(['deck', 'deck', 'stair', 'floor', 'floor', 'floor', 'prisoner']);
+        if (k === 'deck' && decks.length) {
+          const b = r.pick(decks), x0 = Math.max(b.x0, pt.x) + 16, x1 = Math.min(b.x1, pt.x + pt.w) - 16;
+          if (x1 > x0) n += group(b.z, r.range(x0, x1), 0, x => Build.beamTop(b, x), r.sign());
+        } else if (k === 'stair' && flights.length) {
+          const st = r.pick(flights), x = G.lerp(st.S, st.E, r.range(0.3, 0.75)).x;
+          if (put(st.z, x, Build.stairTop(st, x), 'climb', Math.sign(st.E.x - st.S.x) || 1)) n++;
+        } else if (k === 'prisoner' && footed.length) {
+          const p = r.pick(footed), side = r.sign(), z = p.z, h = hOf(z);
+          if (put(z, p.x + side * (p.w / 2 + h * 0.32), p.y1, 'chained', -side, { chainTo: p.x + side * p.w / 2 })) n++;
+        } else if (k === 'floor') {
+          const z = r.range(1.05, Math.max(1.2, Math.min(H.zB * 0.55, 3.2)));
+          const x0 = Math.max(wallL(z), pt.x) + 20, x1 = Math.min(wallR(z), pt.x + pt.w) - 20;
+          if (x1 > x0) n += group(z, r.range(x0, x1), sc.floorAt(z), null, r.sign());
+        }
+      }
+    }
+
+    // what time and imagination added must be held up; if not, it was never built
+    const loose = audit();
+    const kept = out.filter(s => s.user || !loose.includes(s));
+    kept.unsupported = loose.filter(s => s.user);
+    return kept;
+
+    /* ----- 8. audit: starting from the floor, the hall walls, the vaults and the frame, find
+       what is really held up by something that is itself held up ----- */
+    // each need is a list of points; it is met when any one of them is held
+    function needs(s) {
+      switch (s.kind) {
+        case 'pier': return [[P(s.x, s.y1), P(s.x - s.w * 0.3, s.y1), P(s.x + s.w * 0.3, s.y1)]];
+        case 'wall': return [[P((s.x0 + s.x1) / 2, s.y1), P(s.x0 + 4, s.y1), P(s.x1 - 4, s.y1)]];
+        case 'spiral': return [[P(s.x, s.y1)]];
+        case 'arch': {
+          const [L, R] = archLR(s);
+          return [[P((L + s.cx - s.rx) / 2, s.gy)], [P((R + s.cx + s.rx) / 2, s.gy)]];
+        }
+        // a solid stair is a mass of masonry on the ground; a flying one needs both ends
+        case 'stair': return [[s.S], [s.E]];
+        case 'beam': {
+          // an end is held at its tip, by something under it a little way in, or by what it butts into
+          const tol = Math.max(24, (s.x1 - s.x0) * 0.15);
+          const end = e => {
+            const x = e < 0 ? s.x0 : s.x1, yb = Build.beamBottom(s, x), ym = (Build.beamTop(s, x) + yb) / 2;
+            const o = [P(x, ym), P(x + e * 4, ym)];
+            for (let k = 0; k <= tol; k += 4) o.push(P(x - e * k, Build.beamBottom(s, x - e * k) + 3));
+            return o;
+          };
+          if (s.consoleFrom) return [end(s.consoleFrom)];
+          return [end(-1), end(1)];
+        }
+        case 'hang': return [[P(s.x, s.y0)]];
+        case 'pulley': return [[P(s.x, s.y0)]];
+        case 'chain': return [[s.A], [s.B]];
+        case 'rope': return [[s.pts[0]]];
+        case 'figure': return [[P(s.x, s.y)]];
+      }
+      return [];
+    }
+    function grounded(s, p) {
+      const z = s.z;
+      if (p.x <= pt.x + 2 || p.x >= pt.x + pt.w - 2 || p.y <= Math.max(ceilY(z), pt.y) + 3) return true;
+      if (p.y > sc.floorAt(z) - 4 || p.y > pt.y + pt.h) return true;
+      return p.x <= wallL(z) + 6 || p.x >= wallR(z) - 6;
+    }
+    function audit() {
+      const ok = new Set(), bear = new Set();
+      const cand = out.filter(s => s.kind !== 'window');
+      const meets = (s, pts) => pts.some(p => grounded(s, p) || out.some(o => o !== s && (ok.has(o) || bear.has(o)) && near(o.z, s.z) && !(s.kind === 'beam' && o.kind === 'beam') && !(s.kind === 'stair' && o === s) && heldBy(o, p)));
+      let changed = true;
+      while (changed) {
+        changed = false;
+        for (const s of cand) {
+          if (ok.has(s)) continue;
+          const nd = needs(s);
+          // a solid flight standing on its foot is masonry that can carry its own landing
+          if (s.kind === 'stair' && s.solid && !bear.has(s) && meets(s, nd[0])) { bear.add(s); changed = true; }
+          if (nd.every(pts => meets(s, pts))) { ok.add(s); changed = true; }
+        }
+      }
+      return cand.filter(s => !ok.has(s));
+    }
+    function heldBy(o, p) {
+      // a rope or chain hung from above holds whatever is tied to its lower end
+      if (o.kind === 'rope') return G.dist(o.pts[o.pts.length - 1], p) < 6;
+      const b = bodyOf(o);
+      if (b && OFF.some(([dx, dy]) => contains(b, P(p.x + dx, p.y + dy)))) return true;
+      for (const f of surfacesOf(o)) if (p.x >= f.x0 - 4 && p.x <= f.x1 + 4 && Math.abs(f.y(clamp(p.x, f.x0, f.x1)) - p.y) < 7) return true;
+      return false;
+    }
   }
 
-  return { resolve };
+  return { resolve, boxOf };
 })();

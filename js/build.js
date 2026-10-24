@@ -1158,19 +1158,24 @@ const Build = (() => {
     const h = s.h, x = s.x, y = s.y;
     const f = s.facing || r.sign();
     const pose = s.pose || r.pick(['stand', 'point', 'staff', 'hunch', 'stride', 'point', 'sit']);
-    const lean = (pose === 'hunch' ? 0.16 : r.range(-0.03, 0.05)) * h * f;
-    const hh = pose === 'sit' ? h * 0.72 : h;
+    const lean = (pose === 'hunch' || pose === 'chained' ? 0.16 : pose === 'climb' ? 0.12 : r.range(-0.03, 0.05)) * h * f;
+    const hh = pose === 'sit' || pose === 'chained' ? h * 0.72 : h;
     const hr = h * 0.075;
     const head = P(x + lean, y - hh + hr);
     const shY = y - hh + hr * 2.3, sh = h * 0.12;
-    const hemY = y - h * (pose === 'stride' ? 0.24 : pose === 'sit' ? 0.05 : 0.17);
-    const hw = h * (pose === 'stride' ? 0.2 : pose === 'sit' ? 0.24 : 0.15);
+    const seated = pose === 'sit' || pose === 'chained';
+    const hemY = y - h * (pose === 'stride' || pose === 'climb' ? 0.24 : seated ? 0.05 : 0.17);
+    const hw = h * (pose === 'stride' || pose === 'climb' ? 0.2 : seated ? 0.24 : 0.15);
     const sway = r.range(-0.04, 0.06) * h * f;
     const body = [
       P(head.x - sh * 0.45, shY - hr * 0.5), P(head.x + sh * 0.45, shY - hr * 0.5), P(head.x + sh, shY + hr * 0.7),
       P(x + hw + sway, hemY), P(x + sway * 0.3, hemY + h * 0.03), P(x - hw + sway, hemY), P(head.x - sh, shY + hr * 0.7),
     ];
-    if (pose !== 'sit') {
+    if (pose === 'climb') {
+      // the back foot on this tread, the front one lifted to the next
+      pl.ink(P(x - f * hw * 0.35, hemY), P(x - f * h * 0.1, y), 0.8, 0.95, 0.1, 0);
+      pl.ink(P(x + f * hw * 0.35, hemY), P(x + f * h * 0.16, y - h * 0.09), 0.8, 0.95, 0.1, 0);
+    } else if (!seated) {
       const st = pose === 'stride' ? h * 0.14 : h * 0.05;
       pl.ink(P(x - hw * 0.35, hemY), P(x - st - hw * 0.2, y), 0.8, 0.95, 0.1, 0);
       pl.ink(P(x + hw * 0.35, hemY), P(x + st + hw * 0.2, y), 0.8, 0.95, 0.1, 0);
@@ -1190,6 +1195,16 @@ const Build = (() => {
       pl.ink(P(sx, y), P(sx + f * h * 0.05, y - h * 1.08), 0.8, 0.95, 0.1, 0);
       pl.ink(shoulder, P(sx + f * h * 0.03, y - h * 0.62), 0.7, 0.95, 0.1, 0);
     } else if (pose === 'hunch') pl.ink(shoulder, P(x + f * h * 0.3, y - h * 0.45), 0.7, 0.95, 0.1, 0);
+    else if (pose === 'chained') {
+      // arms drawn to the knees, a chain from the wrist to a ring in the pier
+      const wrist = P(x + f * h * 0.18, y - h * 0.28);
+      pl.ink(shoulder, wrist, 0.7, 0.95, 0.1, 0);
+      if (s.chainTo != null) {
+        const ring = P(s.chainTo, y - h * 0.62);
+        chainAlong(pl, sag(wrist, ring, h * 0.12, 10), clamp(h * 0.07, 1.6, 4));
+        pl.path(ellipse(ring.x, ring.y, h * 0.06, h * 0.07, 0, 2 * PI, 8), true, 0.6, 0.95, 0.05);
+      }
+    }
     else pl.ink(shoulder, P(x + f * h * 0.2, y - hh * 0.48), 0.7, 0.95, 0.1, 0);
     for (let i = 0; i < 3; i++) pl.ink(P(x - hw * 0.2, y + i * 0.9), P(x + h * (0.5 - i * 0.12), y + i * 0.9), 0.5, 0.75, 0.1, 0);
   }
