@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Carceri Etching Machine</title>
+  <meta name="description" content="Sketch simple lines; a procedural burin turns them into a Piranesi-style imaginary prison etching.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400&family=IM+Fell+English:ital@0;1&family=IM+Fell+English+SC&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <header class="masthead">
+    <h1>Carceri d’Invenzione</h1>
+    <p>Sketch a prison of the imagination. A procedural burin does the rest: no AI, only geometry, perspective and hatching.</p>
+  </header>
+
+  <main class="app">
+    <aside class="panel tools" aria-label="Drawing tools">
+      <h2>Burin</h2>
+      <div class="toolgrid" id="tools"></div>
+
+      <h2>Depth layer</h2>
+      <div class="seg" id="layers">
+        <button data-z="1" class="on">Near</button>
+        <button data-z="1.8">Middle</button>
+        <button data-z="3">Far</button>
+      </div>
+
+      <h2>How strokes are read</h2>
+      <ul class="legend">
+        <li><b>│</b> vertical line becomes a rusticated pier</li>
+        <li><b>─</b> horizontal line becomes a bridge with balustrade</li>
+        <li><b>⌒</b> a gentle hump becomes a curved bridge</li>
+        <li><b>∩</b> an arc becomes an arch and a receding vault</li>
+        <li><b>⌐</b> steps or a diagonal become a staircase</li>
+        <li><b>⤴</b> a sweeping curve becomes a stair that follows it</li>
+        <li><b>∪</b> a sagging curve becomes a chain</li>
+        <li><b>≀</b> a wavy drop becomes a hanging chain and lantern</li>
+        <li><b>○</b> a closed loop becomes a barred window</li>
+        <li><b>·</b> a dot becomes a tiny figure</li>
+        <li><b>~</b> anything else becomes a rope</li>
+      </ul>
+    </aside>
+
+    <section class="stage">
+      <div class="viewbar">
+        <div class="seg" id="views">
+          <button data-view="sketch" class="on">Sketch</button>
+          <button data-view="overlay">Overlay</button>
+          <button data-view="etch">Etching</button>
+        </div>
+        <span class="status" id="status">Draw on the plate, then press Etch.</span>
+      </div>
+      <div class="frame" id="frame">
+        <canvas id="etch" aria-label="Etched result"></canvas>
+        <canvas id="sketch" aria-label="Sketch canvas"></canvas>
+        <div class="progress" id="progress"><span></span></div>
+      </div>
+    </section>
+
+    <aside class="panel controls" aria-label="Etching controls">
+      <button class="primary" id="btnEtch">Etch the plate</button>
+      <div class="row2">
+        <button id="btnReimagine" title="New random seed (R)">Reimagine</button>
+        <button id="btnExample">Load example</button>
+      </div>
+      <div class="row3">
+        <button id="btnUndo" title="Ctrl+Z">Undo</button>
+        <button id="btnClear">Clear</button>
+        <button id="btnSave">Save PNG</button>
+      </div>
+
+      <h2>The plate</h2>
+      <div id="sliders"></div>
+
+      <label class="check"><input type="checkbox" id="chkAnim" checked> Animate the burin</label>
+      <label class="check"><input type="checkbox" id="chkLive"> Re-etch after each stroke</label>
+
+      <p class="note">Everything is procedural. Strokes are classified by shape, regularised into architecture,
+        extruded toward the vanishing point, shaded by a fixed light and rendered as layered cross-hatching.
+        The seed makes every plate reproducible.</p>
+    </aside>
+  </main>
+
+  <script src="js/rng.js"></script>
+  <script src="js/geom.js"></script>
+  <script src="js/plate.js"></script>
+  <script src="js/wear.js"></script>
+  <script src="js/build.js"></script>
+  <script src="js/interpret.js"></script>
+  <script src="js/hall.js"></script>
+  <script src="js/structure.js"></script>
+  <script src="js/tone.js"></script>
+  <script src="js/paper.js"></script>
+  <script src="js/engine.js"></script>
+  <script src="js/example.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
